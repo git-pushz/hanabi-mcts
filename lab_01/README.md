@@ -1,0 +1,2 @@
+## Notes relative to MCTS algorithm
+The program structure architecture is largely inspired by the repo at https://github.com/vgarciasc/mcts-viz. Eventhough probably not necessary, I wanted to make the most of the laboratory and try to implement and object oriented solution.
