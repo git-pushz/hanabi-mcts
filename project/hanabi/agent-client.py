@@ -2,9 +2,11 @@
 
 from sys import argv, stdout
 from threading import Thread
+from threading import Condition
 import GameData
 import socket
 from constants import *
+from agent import Agent
 import os
 
 
@@ -19,6 +21,10 @@ else:
     ip = argv[1]
     port = int(argv[2])
 
+players = []
+
+agent = None
+
 run = True
 
 statuses = ["Lobby", "Game", "GameHint"]
@@ -27,61 +33,50 @@ status = statuses[0]
 
 hintState = ("", "")
 
-def manageInput():
+def exit_action():
+    global run
+    run = False
+    os._exit(0)
+
+def show_action():
+    if status == statuses[0]:
+        s.send(GameData.ClientGetGameStateRequest(playerName).serialize())
+
+def discard_action(cardOrder):
+    try:
+        s.send(GameData.ClientPlayerDiscardCardRequest(playerName, cardOrder).serialize())
+    except:
+        print("Maybe you wanted to type 'discard <num>'?")
+
+def play_action(cardOrder):
+    if status == statuses[1]:
+        try:
+            s.send(GameData.ClientPlayerPlayCardRequest(playerName, cardOrder).serialize())
+        except:
+            print("Maybe you wanted to type 'play <num>'?")
+
+def hint_action(destination, t, value):
+    try:
+        if t != "colour" and t != "color" and t != "value":
+            print("Error: type can be 'color' or 'value'")
+        if t == "value":
+            value = int(value)
+            if int(value) > 5 or int(value) < 1:
+                print("Error: card values can range from 1 to 5")
+        else:
+            if value not in ["green", "red", "blue", "yellow", "white"]:
+                print("Error: card color can only be green, red, blue, yellow or white")
+        s.send(GameData.ClientHintData(playerName, destination, t, value).serialize())
+    except:
+        print("Maybe you wanted to type 'hint <type> <destinatary> <value>'?")
+
+def manageInput(cv):
     global run
     global status
-    while run:
-        command = input()
-        # Choose data to send
-        if command == "exit":
-            run = False
-            os._exit(0)
-        elif command == "ready" and status == statuses[0]:
-            s.send(GameData.ClientPlayerStartRequest(playerName).serialize())
-        elif command == "show" and status == statuses[1]:
-            s.send(GameData.ClientGetGameStateRequest(playerName).serialize())
-        elif command.split(" ")[0] == "discard" and status == statuses[1]:
-            try:
-                cardStr = command.split(" ")
-                cardOrder = int(cardStr[1])
-                s.send(GameData.ClientPlayerDiscardCardRequest(playerName, cardOrder).serialize())
-            except:
-                print("Maybe you wanted to type 'discard <num>'?")
-                continue
-        elif command.split(" ")[0] == "play" and status == statuses[1]:
-            try:
-                cardStr = command.split(" ")
-                cardOrder = int(cardStr[1])
-                s.send(GameData.ClientPlayerPlayCardRequest(playerName, cardOrder).serialize())
-            except:
-                print("Maybe you wanted to type 'play <num>'?")
-                continue
-        elif command.split(" ")[0] == "hint" and status == statuses[1]:
-            try:
-                destination = command.split(" ")[2]
-                t = command.split(" ")[1].lower()
-                if t != "colour" and t != "color" and t != "value":
-                    print("Error: type can be 'color' or 'value'")
-                    continue
-                value = command.split(" ")[3].lower()
-                if t == "value":
-                    value = int(value)
-                    if int(value) > 5 or int(value) < 1:
-                        print("Error: card values can range from 1 to 5")
-                        continue
-                else:
-                    if value not in ["green", "red", "blue", "yellow", "white"]:
-                        print("Error: card color can only be green, red, blue, yellow or white")
-                        continue
-                s.send(GameData.ClientHintData(playerName, destination, t, value).serialize())
-            except:
-                print("Maybe you wanted to type 'hint <type> <destinatary> <value>'?")
-                continue
-        elif command == "":
-            print("[" + playerName + " - " + status + "]: ", end="")
-        else:
-            print("Unknown command: " + command)
-            continue
+    with cv:
+        cv.wait() # wait for our turn
+        ## TODO
+        # manage action
         stdout.flush()
 
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -93,7 +88,10 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
     if type(data) is GameData.ServerPlayerConnectionOk:
         print("Connection accepted by the server. Welcome " + playerName)
     print("[" + playerName + " - " + status + "]: ", end="")
-    Thread(target=manageInput).start()
+
+    condition = Condition()
+    Thread(target=manageInput, args=(condition,)).start()
+
     while run:
         dataOk = False
         data = s.recv(DATASIZE)
@@ -113,14 +111,22 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         if type(data) is GameData.ServerStartGameData:
             dataOk = True
             print("Game start!")
+
+            players = data.players
             s.send(GameData.ClientPlayerReadyData(playerName).serialize())
             status = statuses[1]
-            ## TODO
-            # start waiting on CV
+            show_action()
+
 
         # received when the command "show" is sent
         if type(data) is GameData.ServerGameStateData:
             dataOk = True
+
+            if agent is None:
+                agent = Agent(playerName, data, players)
+            else:
+                print("Agent already exists")
+
             print("Current player: " + data.currentPlayer)
             print("Player hands: ")
             for p in data.players:
