@@ -39,7 +39,7 @@ def exit_action():
     os._exit(0)
 
 def show_action():
-    if status == statuses[0]:
+    if status == statuses[1]:
         s.send(GameData.ClientGetGameStateRequest(playerName).serialize())
 
 def discard_action(cardOrder):
@@ -87,7 +87,7 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
     data = GameData.GameData.deserialize(data)
     if type(data) is GameData.ServerPlayerConnectionOk:
         print("Connection accepted by the server. Welcome " + playerName)
-    print("[" + playerName + " - " + status + "]: ", end="")
+        s.send(GameData.ClientPlayerStartRequest(playerName).serialize())
 
     condition = Condition()
     Thread(target=manageInput, args=(condition,)).start()
@@ -124,41 +124,43 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
 
             if agent is None:
                 agent = Agent(playerName, data, players)
+                print(agent.knowledge.to_string())
             else:
-                print("Agent already exists")
-
-            print("Current player: " + data.currentPlayer)
-            print("Player hands: ")
-            for p in data.players:
-                print(p.toClientString())
-            print("Table cards: ")
-            for pos in data.tableCards:
-                print(pos + ": [ ")
-                for c in data.tableCards[pos]:
-                    print(c.toClientString() + " ")
-                print("]")
-            print("Discard pile: ")
-            for c in data.discardPile:
-                print("\t" + c.toClientString())            
-            print("Note tokens used: " + str(data.usedNoteTokens) + "/8")
-            print("Storm tokens used: " + str(data.usedStormTokens) + "/3")
-            ## TODO
-            # update the state of the agent (mental state representation of all players in particular)
+                agent.update_knowledge(data.players)
+                print(agent.knowledge.to_string())
+                print(agent.hands)
+            # print("Current player: " + data.currentPlayer)
+            # print("Player hands: ")
+            # for p in data.players:
+            #     print(p.toClientString())
+            # print("Table cards: ")
+            # for pos in data.tableCards:
+            #     print(pos + ": [ ")
+            #     for c in data.tableCards[pos]:
+            #         print(c.toClientString() + " ")
+            #     print("]")
+            # print("Discard pile: ")
+            # for c in data.discardPile:
+            #     print("\t" + c.toClientString())            
+            # print("Note tokens used: " + str(data.usedNoteTokens) + "/8")
+            # print("Storm tokens used: " + str(data.usedStormTokens) + "/3")
 
         if type(data) is GameData.ServerActionInvalid:
             dataOk = True
+            # something is wrong, shouldn't be here
             print("Invalid action performed. Reason:")
             print(data.message)
-            ## TODO
-            # something went wrong, it shouldn't happen
-        
+            stdout.flush()
+            run = False
+
         # received when one player discard a card 
         if type(data) is GameData.ServerActionValid:
             dataOk = True
             print("Action valid!")
             print("Current player: " + data.player)
+            agent.update_last_action(data)
+            show_action()
             ## TODO
-            # update agent state
             # check CV
 
         # received when one player play a card
@@ -166,6 +168,8 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             dataOk = True
             print("Nice move!")
             print("Current player: " + data.player)
+            agent.update_last_action(data)
+            show_action()
             ## TODO
             # update agent state
             # check CV
@@ -174,6 +178,8 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         if type(data) is GameData.ServerPlayerThunderStrike:
             dataOk = True
             print("OH NO! The Gods are unhappy with you!")
+            agent.update_last_action(data)
+            show_action()
             ## TODO
             # update agent state
 
@@ -184,8 +190,11 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             print("Player " + data.destination + " cards with value " + str(data.value) + " are:")
             for i in data.positions:
                 print("\t" + str(i))
-            ## TODO
-            # update agent state
+            agent.update_last_action(data)
+            show_action()
+            if (data.destination == playerName):
+                agent.update_knowledge_on_hint_received(data.type, data.value, data.positions)
+
 
         if type(data) is GameData.ServerInvalidDataReceived:
             dataOk = True
