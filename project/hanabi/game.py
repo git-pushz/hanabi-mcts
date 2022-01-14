@@ -10,6 +10,9 @@ class Card(object):
         self.value = value
         self.color = color
 
+    def __repr__(self):
+        return ("Card " + str(self.value) + " - " + str(self.color))
+
     def toString(self):
         return ("Card " + str(self.id) + "; value: " + str(self.value) + "; color: " + str(self.color))
 
