@@ -34,6 +34,9 @@ class Agent():
             col = np.array(CARD_QUANTITIES)
             col = col.reshape(col.size, 1)
             self.table = np.tile(col, len(colors))
+            #TODO
+            self.fully_determined=False
+            self.fully_determined_now=False
             self.state = card_states[0]
             self.agent = agent
 
@@ -97,6 +100,12 @@ class Agent():
             #   if np.sum(self.table[mask, :]) == 0: self.state = card_states[1]
 
 
+        def get_table(self):
+            '''
+            Return the numpy array which is the mental state rappresentation of the card
+            '''
+            return self.table
+
         def to_string(self) -> str:
             s = '\n'.join([''.join(['{:4}'.format(item) for item in row]) for row in self.table])
             s += '\n'
@@ -111,9 +120,13 @@ class Agent():
             self.ms_hand = np.array([Agent.MentalState(agent) for _ in range(HAND_SIZE)], dtype=Agent.MentalState)
             self.agent = agent
 
-        def update_whole_hand(self, rank: int, color: int):
-            for c in self.ms_hand:
-                c.card_drawn(rank, color)
+        def update_whole_hand(self, rank: int, color: int, fully_determined=None):
+            if(fully_determined==None):
+                for c in self.ms_hand:
+                    c.card_drawn(rank, color)
+            else:
+                for c in self.ms_hand:
+                    c.get_table()[rank,color] -= 1
         
         def update_card(self, card_index: int, rank: int = None, color: int = None):
             assert((rank is None) != (color is None))
@@ -127,6 +140,19 @@ class Agent():
             Return a list of MentalStates for cards whose state is card_states[state]
             '''
             return [idx[0] for idx, card in np.ndenumerate(self.ms_hand) if card.state == card_states[state]]
+
+        def get_fully_determined_cards(self):
+            '''
+            Return the index of all Fully Determined cards in a hand/PlayerMentalState specifically a list of MentalStates 
+            for cards whose state is different from none, which means that a card is fully determined
+            ''' 
+            return [idx[0] for idx, card in np.ndenumerate(self.ms_hand) if card.state != 'none']
+
+        def get_card_from_index(self, index: int):
+            '''
+            Return a mental state of a card given the index of it in a hand/PlayerMentalState
+            '''
+            return self.ms_hand[index]
 
         def to_string(self) -> str:
             s = ''
@@ -232,9 +258,9 @@ class Agent():
         if type(data) is GameData.ServerPlayerThunderStrike:
             self.last_action.update_last_action(data.lastPlayer, data.cardHandIndex)
             self.errors += 1
-        # if type(data) is GameData.ServerHintData:
-        #     self.last_action.update_last_action(data.lastPlayer, data.cardHandIndex)
-        #     self.hints += 1
+        #if type(data) is GameData.ServerHintData:
+        #    self.last_action.update_last_action(data.lastPlayer, data.cardHandIndex)
+        #    self.hints += 1
 
     def update_knowledge(self, players: list):
         if (self.last_action.last_player == self.name):
@@ -243,6 +269,8 @@ class Agent():
         self.knowledge.card_discovered(self.hands, self.last_action.last_player, self.hands[self.last_action.last_player][self.last_action.card_index], new_card)
         self.hands[self.players.index(self.last_action.last_player)] = players[self.players.index(self.last_action.last_player)].hand
         
+
+    
     def update_knowledge_on_hint_received(self, data: GameData.ServerHintData):
         # data.type, data.value, data.positions, data.destination
         for pos in data.positions:
