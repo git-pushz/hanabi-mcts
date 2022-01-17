@@ -34,9 +34,8 @@ class Agent():
             col = np.array(CARD_QUANTITIES)
             col = col.reshape(col.size, 1)
             self.table = np.tile(col, len(colors))
-            #TODO
             self.fully_determined=False
-            self.fully_determined_now=False
+            self.fully_determined_now=False 
             self.state = card_states[0]
             self.agent = agent
 
@@ -71,6 +70,11 @@ class Agent():
             r, c = np.nonzero(self.table)
             if (len(r) == 1 and len(c) == 1): # if the card is fully determined
                 print("card is fully determined")
+                
+                #set correctly attributes for the fully determined card
+                self.fully_determined=True
+                self.fully_determined_now=True
+
                 r = r[0]+1  # rank of the card
                 c = c[0]    # color of the card
                 if self.agent.board[c]+1 == r:
@@ -85,6 +89,8 @@ class Agent():
                 for t in self.agent.trash:
                     if t.value == r and t.color == colors[c]:
                         counter += 1
+                #TODO
+                #probably a bug here if the first fully_determined card is a 5 and trash is empty
                 if CARD_QUANTITIES[r] - counter == 1:
                     print("card risky")
                     self.state = card_states[4] # risky
@@ -126,7 +132,17 @@ class Agent():
                     c.card_drawn(rank, color)
             else:
                 for c in self.ms_hand:
-                    c.get_table()[rank,color] -= 1
+                    #decrease value of other cards in agent's hand if a recent fully determined card is detected (the recent FD card must not be decreased) 
+                    if c.fully_determined_now == False:
+                        c.get_table()[rank,color] -= 1
+
+        def reset_recent_fully_determined_cards(self):
+            """
+            This function reset to False the fully_determined_now attribute of each card of a Player's hand
+            """
+            for card in self.ms_hand:
+                if(card.fully_determined_now==True):
+                    card.fully_determined_now==False
         
         def update_card(self, card_index: int, rank: int = None, color: int = None):
             assert((rank is None) != (color is None))
@@ -141,12 +157,11 @@ class Agent():
             '''
             return [idx[0] for idx, card in np.ndenumerate(self.ms_hand) if card.state == card_states[state]]
 
-        def get_fully_determined_cards(self):
+        def get_new_fully_determined_cards(self):
             '''
-            Return the index of all Fully Determined cards in a hand/PlayerMentalState specifically a list of MentalStates 
-            for cards whose state is different from none, which means that a card is fully determined
+            Return the index of all RECENT Fully Determined cards in a hand/PlayerMentalState, specifically a list of MentalStates 
             ''' 
-            return [idx[0] for idx, card in np.ndenumerate(self.ms_hand) if card.state != 'none']
+            return [idx[0] for idx, card in np.ndenumerate(self.ms_hand) if (card.fully_determined == True and card.fully_determined_now == True)]
 
         def get_card_from_index(self, index: int):
             '''
