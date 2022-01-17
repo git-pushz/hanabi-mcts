@@ -132,7 +132,7 @@ class Agent():
                     c.card_drawn(rank, color)
             else:
                 for c in self.ms_hand:
-                    #decrease value of other cards in agent's hand if a recent fully determined card is detected (the recent FD card must not be decreased) 
+                    #decrease value of other cards in agent's hand if a recent fully determined card is detected (the recent FD cards must not be decreased) 
                     if c.fully_determined_now == False:
                         c.get_table()[rank,color] -= 1
 
