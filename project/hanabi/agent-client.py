@@ -11,11 +11,12 @@ import os
 
 import numpy as np
 
+
 def main():
     if len(argv) < 4:
         print("You need the player name to start the game.")
-        #exit(-1)
-        playerName = "Test" # For debug
+        # exit(-1)
+        playerName = "Test"  # For debug
         ip = HOST
         port = PORT
     else:
@@ -24,21 +25,14 @@ def main():
         port = int(argv[2])
 
     players = []
-
     agent = None
-
     run = True
-
     hint_received = False
-
     statuses = ["Lobby", "Game", "GameHint"]
-
     status = statuses[0]
 
-    hintState = ("", "")
-
     def exit_action():
-        global run
+        nonlocal run
         run = False
         os._exit(0)
 
@@ -74,11 +68,11 @@ def main():
         except:
             print("Maybe you wanted to type 'hint <type> <destinatary> <value>'?")
 
-    def manageInput(cv):
+    def agent_move_thread(cv: Condition):
         with cv:
             while run:
                 print("waiting on cv")
-                cv.wait() # wait for our turn
+                cv.wait()  # wait for our turn
                 print("cv notified!")
                 try:
                     s.send(agent.make_move().serialize())
@@ -97,7 +91,7 @@ def main():
             s.send(GameData.ClientPlayerStartRequest(playerName).serialize())
 
         cv = Condition()
-        Thread(target=manageInput, args=(cv,)).start()
+        Thread(target=agent_move_thread, args=(cv,)).start()
 
         while run:
             dataOk = False
@@ -106,14 +100,14 @@ def main():
                 continue
             data = GameData.GameData.deserialize(data)
 
-            # received when one player send the "ready"
+            # 1 received when one player send the "ready"
             if type(data) is GameData.ServerPlayerStartRequestAccepted:
                 dataOk = True
-                print("Ready: " + str(data.acceptedStartRequests) + "/"  + str(data.connectedPlayers) + " players")
-                data = s.recv(DATASIZE)
-                data = GameData.GameData.deserialize(data)
+                print("Ready: " + str(data.acceptedStartRequests) + "/" + str(data.connectedPlayers) + " players")
+                # data = s.recv(DATASIZE)
+                # data = GameData.GameData.deserialize(data)
 
-            # received when all players are ready
+            # 2 received when all players are ready
             if type(data) is GameData.ServerStartGameData:
                 dataOk = True
                 print("Game start!")
@@ -123,8 +117,7 @@ def main():
                 status = statuses[1]
                 show_action()
 
-
-            # received when the command "show" is sent
+            # 3 received when the command "show" is sent
             if type(data) is GameData.ServerGameStateData:
                 dataOk = True
 
@@ -132,23 +125,24 @@ def main():
                     agent = Agent(playerName, data, players)
                     print(agent.knowledge.to_string())
                 else:
-                    if (not hint_received):
+                    if not hint_received:
                         agent.update_knowledge(data.players)
                     else:
                         hint_received = False
                     print("Agent knowledge:\n")
                     print(agent.knowledge.to_string())
-                    #print("Agent hands:\n")
-                    #print(agent.hands)
-                    #print("Agent trash:\n")
-                    #print(agent.trash)
-                    #print("Agent board:\n")
-                    #print(agent.board)
+                    # print("Agent hands:\n")
+                    # print(agent.hands)
+                    # print("Agent trash:\n")
+                    # print(agent.trash)
+                    # print("Agent board:\n")
+                    # print(agent.board)
                 if (data.currentPlayer == agent.name):
                     print("agent turn")
                     with cv:
                         cv.notify()
 
+            # 4 received when someone performs an invalid action
             if type(data) is GameData.ServerActionInvalid:
                 dataOk = True
                 # something is wrong, shouldn't be here
@@ -157,37 +151,46 @@ def main():
                 stdout.flush()
                 run = False
 
-            # received when one player discard a card 
+            # 5 received when one player discards a card
             if type(data) is GameData.ServerActionValid:
                 dataOk = True
                 print("Action valid!")
-                print("Current player: " + data.player)
-                agent.update_last_action(data)
-                show_action()
-                ## TODO
-                # check CV
 
-            # received when one player play a card
+                if data.lastPlayer == playerName:
+                    pass
+                else:
+                    show_action()
+
+                # TODO: TURN
+                print("Current player: " + data.player)
+
+            # 6 received when one player plays a card correctly
             if type(data) is GameData.ServerPlayerMoveOk:
                 dataOk = True
                 print("Nice move!")
-                print("Current player: " + data.player)
-                agent.update_last_action(data)
-                show_action()
-                ## TODO
-                # update agent state
-                # check CV
 
-            # received when one player makes a mistake
+                if data.lastPlayer == playerName:
+                    pass
+                else:
+                    show_action()
+
+                # TODO: TURN
+                print("Current player: " + data.player)
+
+            # 7 received when one player makes a mistake
             if type(data) is GameData.ServerPlayerThunderStrike:
                 dataOk = True
                 print("OH NO! The Gods are unhappy with you!")
-                agent.update_last_action(data)
-                show_action()
-                ## TODO
-                # update agent state
 
-            # received when one player hint another player
+                if data.lastPlayer == playerName:
+                    pass
+                else:
+                    show_action()
+
+                # TODO: TURN
+                print("Current player: " + data.player)
+
+            # 8 received when one player hints another player
             if type(data) is GameData.ServerHintData:
                 dataOk = True
                 print("Hint type: " + data.type)
@@ -200,7 +203,7 @@ def main():
                     show_action()
 
                 #########################
-                #TODO
+                # TODO
                 # * decrementare valore carte nella mano dell'agent quando una è FD tranne la carta FD:
                 #        -> agent.py, line 135
                 # * fare in modo che una carta FD faccia scattare l'aggiornamento più di una volta (attributi di classe fully_determined): 
@@ -209,36 +212,40 @@ def main():
                 # ** probabile bug in agent.py, line 94
                 #########################
 
-                #check if after THIS hint to agent the following update generated fully determined cards in agent's hand
-                if(data.destination==agent.name):
-                    #retrive recent fully determined cards
+                # check if after THIS hint to agent the following update generated fully determined cards in agent's hand
+                if (data.destination == agent.name):
+                    # retrive recent fully determined cards
                     fd_cards = agent.knowledge.player_mental_state(agent.name).get_new_fully_determined_cards()
-                    #fd_cards is a list of card indexes in agent's hand which have been detected Fully Determined recently
+                    # fd_cards is a list of card indexes in agent's hand which have been detected Fully Determined recently
                     print('fully determined cards generated with last hint in agent"s hand:\n')
                     print(fd_cards)
-                    
-                    if(len(fd_cards)!=0):
-                        #if agent has recent Fully Determined cards...
+
+                    if (len(fd_cards) != 0):
+                        # if agent has recent Fully Determined cards...
                         for card_index in fd_cards:
-                            #...for each one get the rank and the color of it
+                            # ...for each one get the rank and the color of it
                             print("Risultato get_card_from_index:\n")
                             print(agent.knowledge.player_mental_state(agent.name).get_card_from_index(card_index))
-                            rank, color=np.nonzero(agent.knowledge.player_mental_state(agent.name).get_card_from_index(card_index).get_table())
-                            print("Rank and Color of the FD card: ",rank,color)
-                            #update mental state of each player (including agent)
+                            rank, color = np.nonzero(
+                                agent.knowledge.player_mental_state(agent.name).get_card_from_index(
+                                    card_index).get_table())
+                            print("Rank and Color of the FD card: ", rank, color)
+                            # update mental state of each player (including agent)
                             for player in agent.players:
-                                agent.knowledge.player_mental_state(player).update_whole_hand(rank,color, fully_determined=True)
+                                agent.knowledge.player_mental_state(player).update_whole_hand(rank, color,
+                                                                                              fully_determined=True)
                         # now recent fully determined cards are not recent anymore... 
                         agent.knowledge.player_mental_state(agent.name).reset_recent_fully_determined_cards()
-               
+
                 show_action()
 
+            # 9 received when the agent performs an action against the game rules (?)
             if type(data) is GameData.ServerInvalidDataReceived:
                 dataOk = True
                 print(data.data)
-                ## TODO
                 # something went wrong, it shouldn't happen
 
+            # 10 received when the game is over for some reason
             if type(data) is GameData.ServerGameOver:
                 dataOk = True
                 print(data.message)
@@ -246,11 +253,10 @@ def main():
                 print(data.scoreMessage)
                 stdout.flush()
                 run = False
-                ## TODO
-                # stop client thread (destroy CV)
+                # TODO: stop client thread (destroy CV ??)
 
             if not dataOk:
-                print("Unknown or unimplemented data type: " +  str(type(data)))
+                print("Unknown or unimplemented data type: " + str(type(data)))
             # print("[" + playerName + " - " + status + "]: ", end="")
             stdout.flush()
 
