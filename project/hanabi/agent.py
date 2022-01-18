@@ -54,14 +54,20 @@ class Agent():
             self.table[:, i] = 0
             self.update_card_state()
 
-        def card_drawn(self, rank: int, color: int):
+        def card_drawn(self, rank: int, color: int, is_template=False):
             '''
             Update mental state for a card when a card is drawn from deck
             '''
             rank -= 1
             # self.table[rank, color] must be > 0
-            assert(self.table[rank, color] > 0)
+            # this assertion is technically wrong, if someone received an hint on a 4, all rows a part from the 4th
+            # will become 0, but this doesn't mean that there are no more 3s around
+            # assert(self.table[rank, color] > 0)
+            if (self.table[rank, color] == 0):
+                return
             self.table[rank, color] -= 1
+            if (is_template):
+                return
             self.update_card_state()
             
         def update_card_state(self):
@@ -108,13 +114,13 @@ class Agent():
         Class for holding the mental state of the hand of one player
         '''
         def __init__(self, agent):
-            self.ms_hand = np.array([Agent.MentalState(agent) for _ in range(HAND_SIZE)], dtype=Agent.MentalState)
+            self.ms_hand = [Agent.MentalState(agent) for _ in range(HAND_SIZE)]
             self.agent = agent
 
         def update_whole_hand(self, rank: int, color: int):
             for c in self.ms_hand:
                 c.card_drawn(rank, color)
-        
+
         def update_card(self, card_index: int, rank: int = None, color: int = None):
             assert((rank is None) != (color is None))
             if rank is None:
@@ -127,6 +133,16 @@ class Agent():
             Return a list of MentalStates for cards whose state is card_states[state]
             '''
             return [idx[0] for idx, card in np.ndenumerate(self.ms_hand) if card.state == card_states[state]]
+
+        def reset_card_mental_state(self, card_index: int, player_ms_template):
+            '''
+            Reset the specified card mental state with the template mental state of the player
+            '''
+            print("removing card at index from mental state", card_index)
+            self.ms_hand.pop(card_index)
+            print("appending the mental state template")
+            print(player_ms_template.to_string())
+            self.ms_hand.append(player_ms_template)
 
         def to_string(self) -> str:
             s = ''
@@ -142,26 +158,59 @@ class Agent():
         '''
         def __init__(self, hands: dict, agent):
             self.matrix = {k: Agent.PlayerMentalState(agent) for k in hands.keys()}
+            # it is used to store information of the past knowledge of the match
+            # used as the starting mental state for newly drawn cards by the agent
+            # it is updated in 3 cases:
+            # at MentalStateGlobal initialitiation X
+            # when a card is drawn X
+            # when a card of the agent hand is fully determined
+            self.templates_ms = {k: Agent.MentalState(agent) for k in hands.keys()}
             self.agent = agent
 
             for name, hand in hands.items():
                 for card in hand:
                     for n in hands.keys():
                         if n != name:
+                            self.templates_ms[n].card_drawn(card.value, colors.index(card.color), True)
                             self.matrix[n].update_whole_hand(card.value, colors.index(card.color))
         
-        def card_discovered(self, hands:dict, last_player: str, old_card: Card, new_card: Card):
+        def update_templates_ms(self):
+            '''
+            Update mental state template of each player
+            '''
+            # it actually re-compute it
+            self.templates_ms = {k: Agent.MentalState(self.agent) for k in self.agent.hands.keys()}
+            for name, hand in self.agent.hands.items():
+                for card in hand:
+                    for n in self.agent.hands.keys():
+                        if n != name:
+                            self.templates_ms[n].card_drawn(card.value, colors.index(card.color), True)
+                for card in self.agent.trash:
+                    self.templates_ms[name].card_drawn(card.value, colors.index(card.color), True)
+                for i, pile in enumerate(self.agent.board):
+                    for rank in range(pile):
+                        self.templates_ms[name].card_drawn(rank+1, i, True)
+
+        def card_discovered(self, hands:dict, last_player: str, old_card: Card, new_card: Card=None):
             '''
             Update mental state of each player when a card is played and a new card is drawn
             '''
+            self.matrix[last_player].update_whole_hand(old_card.value, colors.index(old_card.color))
+            print("discarded/ played card", old_card)
+            # new card is optional because if the player who played/ discarded the card is the agent, there is
+            # no way to know which card it draw
+            if (new_card == None):
+                return
             for name in hands.keys():
                 if name != last_player:
                     self.matrix[name].update_whole_hand(new_card.value, colors.index(new_card.color))
-            print(old_card)
-            self.matrix[last_player].update_whole_hand(old_card.value, colors.index(old_card.color))
+            print("drawn card", new_card)
 
         def player_mental_state(self, player_name):
             return self.matrix[player_name]
+
+        def player_template_ms(self, player_name):
+            return self.templates_ms[player_name]
 
         def to_string(self) -> str:
             s = ''
@@ -181,9 +230,10 @@ class Agent():
             self.last_player = None
             self.card_index = None
 
-        def update_last_action(self, last_player: str, card_index: int):
+        def update_last_action(self, last_player: str, card_index: int, card):
             self.last_player = last_player
             self.card_index = card_index
+            self.card = card
     
     def __init__(self, name: str, data: GameData.ServerGameStateData, players_names: list):
         self.name = name
@@ -207,6 +257,7 @@ class Agent():
         self.last_action = Agent.LastAction()
 
     def make_move(self):
+        # checks that hint token is available
         #1. playable?
         cards = self.knowledge.player_mental_state(self.name).get_cards_from_state(1)
         print("cards_from_state", cards)
@@ -223,25 +274,35 @@ class Agent():
 
     def update_last_action(self, data):
         if type(data) is GameData.ServerActionValid:
-            self.last_action.update_last_action(data.lastPlayer, data.cardHandIndex)
+            self.last_action.update_last_action(data.lastPlayer, data.cardHandIndex, data.card)
             self.trash.append(data.card)
         if type(data) is GameData.ServerPlayerMoveOk:
-            self.last_action.update_last_action(data.lastPlayer, data.cardHandIndex)
+            self.last_action.update_last_action(data.lastPlayer, data.cardHandIndex, data.card)
             self.played.append(data.card)
             self.board[colors.index(data.card.color)] += 1
         if type(data) is GameData.ServerPlayerThunderStrike:
-            self.last_action.update_last_action(data.lastPlayer, data.cardHandIndex)
+            self.last_action.update_last_action(data.lastPlayer, data.cardHandIndex, data.card)
             self.errors += 1
+            self.trash.append(data.card)
         # if type(data) is GameData.ServerHintData:
         #     self.last_action.update_last_action(data.lastPlayer, data.cardHandIndex)
         #     self.hints += 1
 
     def update_knowledge(self, players: list):
+        print("updating knowledge..")
+        # if the agent is the one drawing a card, we have no information on the card
         if (self.last_action.last_player == self.name):
-            return
-        new_card = players[self.players.index(self.last_action.last_player)].hand[-1]
-        self.knowledge.card_discovered(self.hands, self.last_action.last_player, self.hands[self.last_action.last_player][self.last_action.card_index], new_card)
-        self.hands[self.players.index(self.last_action.last_player)] = players[self.players.index(self.last_action.last_player)].hand
+            new_card = None
+            self.knowledge.card_discovered(self.hands, self.last_action.last_player, self.last_action.card, new_card)
+        else:
+            new_card = players[self.players.index(self.last_action.last_player)].hand[-1]
+            self.knowledge.card_discovered(self.hands, self.last_action.last_player, self.last_action.card, new_card)
+            # update player hand with new card
+            self.hands[self.last_action.last_player] = players[self.players.index(self.last_action.last_player)].hand
+        # update mental state templates for all players
+        self.knowledge.update_templates_ms()
+        # update mental state of "card_index"th card of the player who drawn a new card
+        self.knowledge.player_mental_state(self.last_action.last_player).reset_card_mental_state(self.last_action.card_index, self.knowledge.player_template_ms(self.last_action.last_player))
         
     def update_knowledge_on_hint_received(self, data: GameData.ServerHintData):
         # data.type, data.value, data.positions, data.destination
