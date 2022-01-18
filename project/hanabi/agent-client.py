@@ -75,17 +75,16 @@ def main():
             print("Maybe you wanted to type 'hint <type> <destinatary> <value>'?")
 
     def manageInput(cv):
-        global run
-        global status
         with cv:
-            print("waiting on cv")
-            cv.wait() # wait for our turn
-            print("cv notified!")
-            try:
-                s.send(agent.make_move().serialize())
-            except Exception as e:
-                print(e)
-            stdout.flush()
+            while run:
+                print("waiting on cv")
+                cv.wait() # wait for our turn
+                print("cv notified!")
+                try:
+                    s.send(agent.make_move().serialize())
+                except Exception as e:
+                    print(e)
+                stdout.flush()
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         request = GameData.ClientPlayerAddData(playerName)
@@ -106,7 +105,6 @@ def main():
             if not data:
                 continue
             data = GameData.GameData.deserialize(data)
-            print('data: ', data)
 
             # received when one player send the "ready"
             if type(data) is GameData.ServerPlayerStartRequestAccepted:
@@ -150,21 +148,6 @@ def main():
                     print("agent turn")
                     with cv:
                         cv.notify()
-                # print("Current player: " + data.currentPlayer)
-                # print("Player hands: ")
-                # for p in data.players:
-                #     print(p.toClientString())
-                # print("Table cards: ")
-                # for pos in data.tableCards:
-                #     print(pos + ": [ ")
-                #     for c in data.tableCards[pos]:
-                #         print(c.toClientString() + " ")
-                #     print("]")
-                # print("Discard pile: ")
-                # for c in data.discardPile:
-                #     print("\t" + c.toClientString())            
-                # print("Note tokens used: " + str(data.usedNoteTokens) + "/8")
-                # print("Storm tokens used: " + str(data.usedStormTokens) + "/3")
 
             if type(data) is GameData.ServerActionInvalid:
                 dataOk = True
@@ -207,12 +190,14 @@ def main():
             # received when one player hint another player
             if type(data) is GameData.ServerHintData:
                 dataOk = True
-                hint_received = True
                 print("Hint type: " + data.type)
                 print("Player " + data.destination + " cards with value " + str(data.value) + " are:")
                 for i in data.positions:
                     print("\t" + str(i))
                 agent.update_knowledge_on_hint_received(data)
+                if (data.destination == agent.name):
+                    hint_received = True
+                    show_action()
 
                 #########################
                 #TODO
@@ -266,7 +251,7 @@ def main():
 
             if not dataOk:
                 print("Unknown or unimplemented data type: " +  str(type(data)))
-            print("[" + playerName + " - " + status + "]: ", end="")
+            # print("[" + playerName + " - " + status + "]: ", end="")
             stdout.flush()
 
 
