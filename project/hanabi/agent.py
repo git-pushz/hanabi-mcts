@@ -60,6 +60,7 @@ class Agent():
             self.table = np.tile(col, len(colors))
             self.state = card_states[0]
             self.agent = agent
+            self.fully_determined = False
 
         def rank_hint_received(self, rank: int):
             '''
@@ -114,36 +115,81 @@ class Agent():
             Update the card's state according to the currently known informations
             (stored in self.table)
             '''
+            if self.state == "useless":
+                return
             r, c = np.nonzero(self.table)
-            if (len(r) == 1 and len(c) == 1): # if the card is fully determined
-                print("card is fully determined")
-                r = r[0]+1  # rank of the card
-                c = c[0]    # color of the card
-                if self.agent.board[c]+1 == r:
-                    print("card playable")
-                    self.state = card_states[1] # playable
+            # r is a numpy array of the row (=rank) indices of nonzero entries of self.table
+            # c is a numpy array of the column (=color) indices of nonzero entries of self.table
+            if len(r) == 1 and len(c) == 1:  # I know both
+                r, c = r[0] + 1, c[0]
+                self.fully_determined = True
+                if self.agent.board[c] == self.agent.maximums[c]:
+                    self.state = "useless"
+                    return
+                elif self.agent.board[c] == r - 1:
+                    self.state = "playable"
                     return
                 elif self.agent.board[c] >= r:
-                    print("card useless")
-                    self.state = card_states[3] # useless
+                    self.state = "useless"
                     return
-                counter = 0
-                for t in self.agent.trash:
-                    if t.value == r and t.color == colors[c]:
-                        counter += 1
-                if CARD_QUANTITIES[r] - counter == 1:
-                    print("card risky")
-                    self.state = card_states[4] # risky
+                elif self.agent.maximums[c] < r-1:
+                    self.state = "useless"
+                    return
+                elif self.table[r, c] == 1:
+                    self.state = "risky"
+                    return
+                elif self.table[r, c] > 1:
+                    self.state = "expendable"
+                    return
                 else:
-                    print("card expendable")
-                    self.state = card_states[2] # expendable
-
-            # values = set(board)
-            # if len(values) == 1:
-            #   value = values.pop()
-            #   mask = numpy.full(5, True, dtype=bool)
-            #   mask[value - 1] = False
-            #   if np.sum(self.table[mask, :]) == 0: self.state = card_states[1]
+                    print("Should not be here")
+                    print(f"rank: {r}, color: {colors[c]} (index {c})")
+                    print(f"Mental State of current card: {self.table}")
+            elif len(np.unique(r)) == 1:  # I know only the rank
+                r = r[0] + 1
+                if max(self.agent.board) == min(self.agent.board) == r - 1:
+                    self.state = "playable"
+                    return
+                elif min(self.agent.board) >= r:
+                    self.state = "useless"
+                    return
+                elif max(self.agent.maximums) < r - 1:
+                    self.state = "useless"
+                    return
+                elif max(self.table[r - 1, :]) == 1:
+                    self.state = "risky"
+                    return
+                elif min(self.table[r - 1, :]) > 1:
+                    self.state = "expendable"
+                    return
+                else:
+                    print("Should not be here")
+                    print(f"rank: {r}")
+                    print(f"Mental State of current card: {self.table}")
+            elif len(np.unique(c)) == 1:  # I know only the color
+                c = c[0]
+                if self.agent.board[c] == self.agent.maximums[c]:
+                    self.state = "useless"
+                    return
+                elif max(self.table[:, c]) == 1:
+                    self.state = "risky"
+                    return
+                elif min(self.table[:, c]) > 1:
+                    self.state = "expendable"
+                    return
+                else:
+                    print("Should not be here")
+                    print(f"color: {colors[c]} (index {c})")
+                    print(f"Mental State of current card: {self.table}")
+            else:  # I know nothing
+                if max(self.table == 1):
+                    self.state = "risky"
+                    return
+                elif min(self.table) > 1:
+                    self.state = "expendable"
+                    return
+                else:
+                    print("Should not be here")
 
 
         def to_string(self) -> str:
@@ -362,6 +408,7 @@ class Agent():
         self.hints = data.usedNoteTokens
         self.errors = data.usedStormTokens
         self.last_action = Agent.LastAction()
+        self.maximums = [5]*5
 
     def make_move(self):
         '''
@@ -394,6 +441,7 @@ class Agent():
         if type(data) is GameData.ServerActionValid:
             self.last_action.update_last_action(data.lastPlayer, data.cardHandIndex, data.card)
             self.trash.append(data.card)
+            self.maximums = self.board_maximums()
         # the action was "successfully playing a card"
         if type(data) is GameData.ServerPlayerMoveOk:
             self.last_action.update_last_action(data.lastPlayer, data.cardHandIndex, data.card)
@@ -402,6 +450,8 @@ class Agent():
         # the action was "unsuccessfully playing a card"
         if type(data) is GameData.ServerPlayerThunderStrike:
             self.last_action.update_last_action(data.lastPlayer, data.cardHandIndex, data.card)
+            self.trash.append(data.card)
+            self.maximums = self.board_maximums()
             self.errors += 1
             self.trash.append(data.card)
         # if type(data) is GameData.ServerHintData:
@@ -439,11 +489,28 @@ class Agent():
         Args:
             data: the object describing the hint
         '''
+        self.hints += 1
+
         for pos in data.positions:
             if data.type == 'color':
                 self.knowledge.player_mental_state(data.destination).update_card(pos, color=colors.index(data.value))
             if data.type == 'value':
                 self.knowledge.player_mental_state(data.destination).update_card(pos, rank=data.value)
+    
+    def board_maximums(self):
+        trash_colors = dict.fromkeys(colors, [])
+        for card in self.trash:
+            trash_colors[card.color].append(card.value)
+
+        maximums = [5]*5
+        for color in colors:
+            for i in range(0, 5):
+                if trash_colors[color].count(i+1) == CARD_QUANTITIES[i]:
+                    maximums[colors.index(color)] = i
+                    break
+
+        return maximums
+
 
     ## TODO
     # 1 quando l'agent conosce, grazie ad un hint, colore e valore di una o più carte, va aggiornato il mental state degli altri giocatori
