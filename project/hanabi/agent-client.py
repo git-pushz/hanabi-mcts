@@ -9,6 +9,8 @@ from constants import *
 from agent import Agent
 import os
 
+import numpy as np
+
 def main():
     if len(argv) < 4:
         print("You need the player name to start the game.")
@@ -134,10 +136,14 @@ def main():
                         agent.update_knowledge(data.players)
                     else:
                         hint_received = False
+                    print("Agent knowledge:\n")
                     print(agent.knowledge.to_string())
-                    print(agent.hands)
-                    print(agent.trash)
-                    print(agent.board)
+                    #print("Agent hands:\n")
+                    #print(agent.hands)
+                    #print("Agent trash:\n")
+                    #print(agent.trash)
+                    #print("Agent board:\n")
+                    #print(agent.board)
                 if (data.currentPlayer == agent.name):
                     print("agent turn")
                     with cv:
@@ -188,14 +194,44 @@ def main():
                 print("Player " + data.destination + " cards with value " + str(data.value) + " are:")
                 for i in data.positions:
                     print("\t" + str(i))
-                # agent.update_last_action(data)
                 agent.update_knowledge_on_hint_received(data)
                 if (data.destination == agent.name):
                     hint_received = True
                     show_action()
+
+                #########################
+                #TODO
+                # * decrementare valore carte nella mano dell'agent quando una è FD tranne la carta FD:
+                #        -> agent.py, line 135
+                # * fare in modo che una carta FD faccia scattare l'aggiornamento più di una volta (attributi di classe fully_determined): 
+                #       -> function get_new_fully_determined_cards()
+                #       -> function reset_recent_fully_determined_cards()
+                # ** probabile bug in agent.py, line 94
+                #########################
+
+                #check if after THIS hint to agent the following update generated fully determined cards in agent's hand
+                if(data.destination==agent.name):
+                    #retrive recent fully determined cards
+                    fd_cards = agent.knowledge.player_mental_state(agent.name).get_new_fully_determined_cards()
+                    #fd_cards is a list of card indexes in agent's hand which have been detected Fully Determined recently
+                    print('fully determined cards generated with last hint in agent"s hand:\n')
+                    print(fd_cards)
                     
-
-
+                    if(len(fd_cards)!=0):
+                        #if agent has recent Fully Determined cards...
+                        for card_index in fd_cards:
+                            #...for each one get the rank and the color of it
+                            print("Risultato get_card_from_index:\n")
+                            print(agent.knowledge.player_mental_state(agent.name).get_card_from_index(card_index))
+                            rank, color=np.nonzero(agent.knowledge.player_mental_state(agent.name).get_card_from_index(card_index).get_table())
+                            print("Rank and Color of the FD card: ",rank,color)
+                            #update mental state of each player (including agent)
+                            for player in agent.players:
+                                agent.knowledge.player_mental_state(player).update_whole_hand(rank,color, fully_determined=True)
+                        # now recent fully determined cards are not recent anymore... 
+                        agent.knowledge.player_mental_state(agent.name).reset_recent_fully_determined_cards()
+               
+                show_action()
 
             if type(data) is GameData.ServerInvalidDataReceived:
                 dataOk = True

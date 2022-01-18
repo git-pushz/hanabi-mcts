@@ -58,6 +58,8 @@ class Agent():
             col = np.array(CARD_QUANTITIES)
             col = col.reshape(col.size, 1)
             self.table = np.tile(col, len(colors))
+            self.fully_determined=False
+            self.fully_determined_now=False 
             self.state = card_states[0]
             self.agent = agent
             self.fully_determined = False
@@ -123,6 +125,7 @@ class Agent():
             if len(r) == 1 and len(c) == 1:  # I know both
                 r, c = r[0] + 1, c[0]
                 self.fully_determined = True
+                self.fully_determined_now=True
                 if self.agent.board[c] == self.agent.maximums[c]:
                     self.state = "useless"
                     return
@@ -192,6 +195,12 @@ class Agent():
                     print("Should not be here")
 
 
+        def get_table(self):
+            '''
+            Return the numpy array which is the mental state rappresentation of the card
+            '''
+            return self.table
+
         def to_string(self) -> str:
             s = '\n'.join([''.join(['{:4}'.format(item) for item in row]) for row in self.table])
             s += '\n'
@@ -210,7 +219,7 @@ class Agent():
             self.ms_hand = [Agent.MentalState(agent) for _ in range(HAND_SIZE)]
             self.agent = agent
 
-        def update_whole_hand(self, rank: int, color: int):
+        def update_whole_hand(self, rank: int, color: int, fully_determined=None):
             '''
             Update all the mental states of the agent's hand when a new card is discovered
 
@@ -218,9 +227,23 @@ class Agent():
                 rank:   the rank of the new discovered card
                 color:  the index of new discovered card's color in the list 'colors'
             '''
-            for c in self.ms_hand:
-                c.card_drawn(rank, color)
+            if(fully_determined==None):
+                for c in self.ms_hand:
+                    c.card_drawn(rank, color)
+            else:
+                for c in self.ms_hand:
+                    #decrease value of other cards in agent's hand if a recent fully determined card is detected (the recent FD cards must not be decreased) 
+                    if c.fully_determined_now == False:
+                        c.get_table()[rank,color] -= 1
 
+        def reset_recent_fully_determined_cards(self):
+            """
+            This function reset to False the fully_determined_now attribute of each card of a Player's hand
+            """
+            for card in self.ms_hand:
+                if(card.fully_determined_now==True):
+                    card.fully_determined_now==False
+                    
         def update_card(self, card_index: int, rank: int = None, color: int = None):
             '''
             Update the mental state of a card in the player's hand when a hint for it is received.
@@ -249,6 +272,18 @@ class Agent():
             '''
             return [idx[0] for idx, card in np.ndenumerate(self.ms_hand) if card.state == card_states[state]]
 
+        def get_new_fully_determined_cards(self):
+            '''
+            Return the index of all RECENT Fully Determined cards in a hand/PlayerMentalState, specifically a list of MentalStates 
+            ''' 
+            return [idx[0] for idx, card in np.ndenumerate(self.ms_hand) if (card.fully_determined == True and card.fully_determined_now == True)]
+
+        def get_card_from_index(self, index: int):
+            '''
+            Return a mental state of a card given the index of it in a hand/PlayerMentalState
+            '''
+            return self.ms_hand[index]
+         
         def reset_card_mental_state(self, card_index: int, player_ms_template):
             '''
             Reset the specified card mental state with the template mental state of the player
@@ -481,6 +516,8 @@ class Agent():
         # update mental state of "card_index"th card of the player who drawn a new card
         self.knowledge.player_mental_state(self.last_action.last_player).reset_card_mental_state(self.last_action.card_index, self.knowledge.player_template_ms(self.last_action.last_player))
         
+
+    
     def update_knowledge_on_hint_received(self, data: GameData.ServerHintData):
         '''
         Update the agent's knowledge (GlobalMentalState) when an hint is sent from a player to another.
