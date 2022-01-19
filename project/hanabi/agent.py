@@ -220,27 +220,27 @@ class Agent:
             return s
 
     class PlayerMentalState:
-        '''
+        """
         The mental states of all the cards in a player's hand
 
         Attributes:
             ms_hand: A numpy array of mental states, one for each card in the player's hand
             agent: The agent this instance is referring to
-        '''
+        """
 
         def __init__(self, agent):
             self.ms_hand = [Agent.MentalState(agent) for _ in range(HAND_SIZE)]
             self.agent = agent
 
         def update_whole_hand(self, rank: int, color: int, fully_determined=None):
-            '''
+            """
             Update all the mental states of the agent's hand when a new card is discovered
 
             Args:
                 rank:   the rank of the new discovered card
                 color:  the index of new discovered card's color in the list 'colors'
                 fully_determined: whether the card was fully determined or not
-            '''
+            """
             if fully_determined is None:
                 for c in self.ms_hand:
                     c.card_drawn(rank, color)
@@ -260,7 +260,7 @@ class Agent:
                     card.fully_determined_now = False
 
         def update_card(self, card_index: int, rank: int = None, color: int = None):
-            '''
+            """
             Update the mental state of a card in the player's hand when a hint for it is received.
             (WARNING: only one between 'rank' and 'color' must be set)
 
@@ -268,7 +268,7 @@ class Agent:
                 card_index: the index of the card in the hand
                 rank:       the rank of the card
                 color:      the index of card's color in the list 'colors'
-            '''
+            """
             assert ((rank is None) != (color is None))
             if rank is None:
                 self.ms_hand[card_index].color_hint_received(color)
@@ -276,34 +276,34 @@ class Agent:
                 self.ms_hand[card_index].rank_hint_received(rank)
 
         def get_cards_from_state(self, state: int):
-            '''
-            Get the hand's cards that have a certain state 
+            """
+            Get the hand's cards that have a certain state
 
             Args:
                 state: the index of the state in the 'card_states' list
 
             Returns:
                 A list of indices of the cards in the specified state inside the hand
-            '''
+            """
             return [idx[0] for idx, card in np.ndenumerate(self.ms_hand) if card.state == card_states[state]]
 
         def get_new_fully_determined_cards(self):
-            '''
-            Return the index of all RECENT Fully Determined cards in a hand/PlayerMentalState, specifically a list of MentalStates 
-            '''
+            """
+            Return the index of all RECENT Fully Determined cards in a hand/PlayerMentalState, specifically a list of MentalStates
+            """
             return [idx[0] for idx, card in np.ndenumerate(self.ms_hand) if
                     (card.fully_determined and card.fully_determined_now)]
 
         def get_card_from_index(self, index: int):
-            '''
+            """
             Return a mental state of a card given the index of it in a hand/PlayerMentalState
-            '''
+            """
             return self.ms_hand[index]
 
         def reset_card_mental_state(self, card_index: int, player_ms_template):
-            '''
+            """
             Reset the specified card mental state with the template mental state of the player
-            '''
+            """
             print("removing card at index from mental state", card_index)
             self.ms_hand.pop(card_index)
             print("appending the mental state template")
@@ -318,7 +318,7 @@ class Agent:
             return s
 
     class MentalStateGlobal:
-        '''
+        """
         The PlayerMentalStates for all the players in the game,
         according to the knowledge of the agent
 
@@ -326,7 +326,7 @@ class Agent:
             matrix: A dictionary where the key is a player's name and
                     the value the corresponding PlayerMentalState
             agent:  The agent this instance is referring to
-        '''
+        """
 
         def __init__(self, hands: dict, agent):
             self.matrix = {k: Agent.PlayerMentalState(agent) for k in hands.keys()}
@@ -347,9 +347,9 @@ class Agent:
                             self.matrix[n].update_whole_hand(card.value, colors.index(card.color))
 
         def update_templates_ms(self):
-            '''
+            """
             Update mental state template of each player
-            '''
+            """
             # it actually re-computes it
             # TODO: VERIFY
             self.templates_ms = {k: Agent.MentalState(self.agent) for k in self.agent.hands.keys()}
@@ -365,7 +365,7 @@ class Agent:
                         self.templates_ms[name].card_drawn(rank + 1, i, True)
 
         def card_discovered(self, hands: dict, last_player: str, old_card: Card, new_card: Card = None):
-            '''
+            """
             Update the PlayerMentalState of all the players when a card is played/discarded
             and a new one is taken from the deck.
             For the player who just performed the action the discovered card will be the played/discarded one,
@@ -377,7 +377,7 @@ class Agent:
                 last_player:    The name of the player who performed the last action
                 old_card:       The played/discarded card
                 new_card:       The drawn card
-            '''
+            """
             self.matrix[last_player].update_whole_hand(old_card.value, colors.index(old_card.color))
             print("discarded/ played card", old_card)
             # new card is optional because if the player who played/ discarded the card is the agent, there is
@@ -576,11 +576,29 @@ class Agent:
         ms = self.knowledge.player_mental_state(self.name)
         card_ms: Agent.MentalState = ms[card_index]
         if not card_ms.fully_determined:
-            # TODO: update all remaining MS in my hand
-            # TODO: update MS of all other players
-            # TODO: update the template
-            # TODO: draw card -> init its mental state
-            pass
+            # card wasn't fully determined
+            for index in range(5):
+                if index != card_index:
+                    self.knowledge.player_mental_state(self.name).update_whole_hand(card.value,
+                                                                                    card.color,
+                                                                                    fully_determined=True)
+                    fully_determined, rank, color = self.knowledge.player_mental_state(self.name)\
+                                                                  .get_card_from_index(index).is_fully_determined()
+                    if fully_determined:
+                        for player in self.players:
+                            if player != self.name:
+                                self.knowledge.player_mental_state(player).card_drawn(rank, color)
+
+            for player in self.players:
+                if player != self.name:
+                    self.knowledge.player_mental_state(player).card_drawn(card.value, card.color)
+
+            # TODO: VERIFY
+            self.knowledge.update_templates_ms()
+
+            self.knowledge.player_mental_state(self.name)\
+                          .reset_card_mental_state(card_index, self.knowledge.player_template_ms(self.name))
+
         else:
             if action_type == 'mistake':
                 print("Should not be here: made a mistake with a fully determined card.", file=sys.stderr)
