@@ -206,7 +206,6 @@ def main():
                 # * fare in modo che una carta FD faccia scattare l'aggiornamento più di una volta (attributi di classe fully_determined): 
                 #       -> function get_new_fully_determined_cards()
                 #       -> function reset_recent_fully_determined_cards()
-                # ** probabile bug in agent.py, line 94
                 #########################
 
                 #check if after THIS hint to agent the following update generated fully determined cards in agent's hand
