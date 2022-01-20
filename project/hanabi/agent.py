@@ -113,16 +113,17 @@ class Agent:
             # assert(self.table[rank, color] > 0)
             if self.table[rank, color] == 0:
                 return
+            ## TODO
             self.table[rank, color] -= 1
             if is_template:
                 return
             self.update_card_state()
 
         def update_card_state(self):
-            '''
+            """
             Update the card's state according to the currently known informations
             (stored in self.table)
-            '''
+            """
             if self.state == "useless":
                 return
             r, c = np.nonzero(self.table)
@@ -156,19 +157,19 @@ class Agent:
                     print(f"Mental State of current card: {self.table}")
             elif len(np.unique(r)) == 1:  # I know only the rank
                 r = r[0] + 1
-                if max(self.agent.board) == min(self.agent.board) == r - 1:
+                if np.max(self.agent.board) == np.min(self.agent.board) == r - 1:
                     self.state = "playable"
                     return
-                elif min(self.agent.board) >= r:
+                elif np.min(self.agent.board) >= r:
                     self.state = "useless"
                     return
-                elif max(self.agent.maximums) < r - 1:
+                elif np.max(self.agent.maximums) < r - 1:
                     self.state = "useless"
                     return
-                elif max(self.table[r - 1, :]) == 1:
+                elif np.max(self.table[r - 1, :]) == 1:
                     self.state = "risky"
                     return
-                elif min(self.table[r - 1, :]) > 1:
+                elif np.min(self.table[r - 1, :]) > 1:
                     self.state = "expendable"
                     return
                 else:
@@ -180,42 +181,48 @@ class Agent:
                 if self.agent.board[c] == self.agent.maximums[c]:
                     self.state = "useless"
                     return
-                elif max(self.table[:, c]) == 1:
+                elif np.max(self.table[:, c]) == 1:
                     self.state = "risky"
                     return
-                elif min(self.table[:, c]) > 1:
+                elif np.min(self.table[:, c]) > 1:
                     self.state = "expendable"
                     return
                 else:
-                    print("Should not be here")
-                    print(f"color: {colors[c]} (index {c})")
-                    print(f"Mental State of current card: {self.table}")
+                    if self.fully_determined:
+                        print("Should not be here")
+                        print(f"color: {colors[c]} (index {c})")
+                        print(f"Mental State of current card: {self.table}")
             else:  # I know nothing
-                if max(self.table == 1):
+                if np.max(self.table) == 1:
                     self.state = "risky"
                     return
-                elif min(self.table) > 1:
+                elif np.min(self.table) > 1:
                     self.state = "expendable"
                     return
                 else:
-                    print("Should not be here")
+                    if self.state != "none":
+                        print("Should not be here")
 
         def get_table(self):
-            '''
+            """
             Return the numpy array which is the mental state rappresentation of the card
-            '''
+            """
             return self.table
 
-        def is_fully_determined(self):
-            if self.fully_determined:
+        def is_fully_determined_now(self):
+            if self.fully_determined_now:
                 r, c = np.nonzero(self.table)
                 assert len(r) == len(c) == 1, "card isn't actually fully determined"
-                return True, r[0]+1, c[0]
+                return True, self.fully_determined, r[0] + 1, c[0]
             else:
-                return False, None, None
+                return False, self.fully_determined, None, None
+
+        def reset_fully_determined_now(self):
+            self.fully_determined_now = False
 
         def to_string(self) -> str:
-            s = '\n'.join([''.join(['{:4}'.format(item) for item in row]) for row in self.table])
+            s = "   r   y   g   b   w\n"
+            s += '\n'.join([''.join(['{:4}'.format(item) for item in row]) for row in self.table])
             s += '\n'
             return s
 
@@ -249,15 +256,16 @@ class Agent:
                     # decrease value of other cards in agent's hand if a recent fully determined card is detected
                     # (the recent FD cards must not be decreased)
                     if not c.fully_determined_now:
+                        ## TODO
                         c.get_table()[rank, color] -= 1
 
-        def reset_recent_fully_determined_cards(self):
-            """
-            This function reset to False the fully_determined_now attribute of each card of a Player's hand
-            """
-            for card in self.ms_hand:
-                if card.fully_determined_now:
-                    card.fully_determined_now = False
+        # def reset_recent_fully_determined_cards(self):
+        #     """
+        #     This function reset to False the fully_determined_now attribute of each card of a Player's hand
+        #     """
+        #     for card in self.ms_hand:
+        #         if card.fully_determined_now:
+        #             card.fully_determined_now = False
 
         def update_card(self, card_index: int, rank: int = None, color: int = None):
             """
@@ -274,6 +282,7 @@ class Agent:
                 self.ms_hand[card_index].color_hint_received(color)
             else:
                 self.ms_hand[card_index].rank_hint_received(rank)
+
 
         def get_cards_from_state(self, state: int):
             """
@@ -404,13 +413,18 @@ class Agent:
         def player_template_ms(self, player_name):
             return self.templates_ms[player_name]
 
-        def to_string(self) -> str:
+        def to_string(self, print_templates=False) -> str:
             s = ''
             for k, v in self.matrix.items():
                 s += f"Player {k}:\n"
                 s += v.to_string()
                 s += '-' * 30
                 s += '\n'
+
+            if print_templates:
+                for k, v in self.templates_ms.items():
+                    s += f"template player {k}:\n {v.to_string()}\n"
+
             return s
 
     class LastAction:
@@ -469,6 +483,7 @@ class Agent:
         Returns:
             A GameData object representing the chosen move
         '''
+        return GameData.ClientPlayerPlayCardRequest(self.name, 0)
         cards = self.knowledge.player_mental_state(self.name).get_cards_from_state(1)
         print("cards_from_state", cards)
         if (len(cards) > 0):
@@ -479,8 +494,9 @@ class Agent:
             print("discarded a useless card")
             return GameData.ClientPlayerDiscardCardRequest(self.name, cards[0])
         # TODO hint
-        print("discarded a random card")
-        return GameData.ClientPlayerDiscardCardRequest(self.name, 0)
+        # print("discarded a random card")
+        # return GameData.ClientPlayerDiscardCardRequest(self.name, 0)
+
 
     def update_last_action(self, data):
         '''
@@ -574,34 +590,37 @@ class Agent:
             action_type: it's one of ['play', 'mistake', 'discard'] FOR DEBUG ONLY
         """
         ms = self.knowledge.player_mental_state(self.name)
-        card_ms: Agent.MentalState = ms[card_index]
+        card_ms: Agent.MentalState = ms.get_card_from_index(card_index)
         if not card_ms.fully_determined:
             # card wasn't fully determined
             for index in range(5):
                 if index != card_index:
                     self.knowledge.player_mental_state(self.name).update_whole_hand(card.value,
-                                                                                    card.color,
+                                                                                    colors.index(card.color),
                                                                                     fully_determined=True)
-                    fully_determined, rank, color = self.knowledge.player_mental_state(self.name)\
-                                                                  .get_card_from_index(index).is_fully_determined()
-                    if fully_determined:
+                    fully_determined_now, fully_determined, rank, color = self.knowledge.player_mental_state(self.name)\
+                        .get_card_from_index(index).is_fully_determined_now()
+                    if fully_determined_now:
                         for player in self.players:
                             if player != self.name:
-                                self.knowledge.player_mental_state(player).card_drawn(rank, color)
+                                self.knowledge.player_mental_state(player).update_whole_hand(rank, color, fully_determined)
 
             for player in self.players:
                 if player != self.name:
-                    self.knowledge.player_mental_state(player).card_drawn(card.value, card.color)
+                    self.knowledge.player_mental_state(player).update_whole_hand(card.value, colors.index(card.color))
 
-            # TODO: VERIFY
             self.knowledge.update_templates_ms()
-
-            self.knowledge.player_mental_state(self.name)\
-                          .reset_card_mental_state(card_index, self.knowledge.player_template_ms(self.name))
 
         else:
             if action_type == 'mistake':
                 print("Should not be here: made a mistake with a fully determined card.", file=sys.stderr)
+
+        # TODO: update agent's hand (fully det)
+        self.knowledge.player_mental_state(self.name).reset_card_mental_state(card_index,
+                                                                              self.knowledge.player_template_ms(
+                                                                                  self.name))
+        print(f"Hands: {self.hands}")
+        print(f"Mental states: {self.knowledge.to_string(print_templates=True)}")
 
     def update_board(self, card: Card):
         self.played.append(card)
@@ -622,16 +641,23 @@ class Agent:
         self.errors += 1
         assert self.errors < 3
 
-    def assert_aligned_with_server(self, hints_used: int, mistakes_made: int, board: list, trash: list, players: list):
+    def assert_aligned_with_server(self, hints_used: int, mistakes_made: int, board, trash: list, players: list):
         assert self.hints == hints_used, "wrong count of hints"
         assert self.errors == mistakes_made, "wrong count of errors"
-        assert self.board == board, "wrong board"
+        # b = [max(v) if len(v) > 0 else 0 for _, v in board.items()]
+        # assert self.board == b, f"wrong board: self.board: {self.board}, board: {board}"
         assert self.trash == trash, " wrong trash"
         for player in players:
             assert player.hand == self.hands[player.name], f"player {player.name} wrong hand"
 
     def track_played_card(self, player_name: str, card_index: int):
         del self.hands[player_name][card_index]
+        # TODO: update agent's hand (fully det)
+        self.knowledge.player_mental_state(player_name).reset_card_mental_state(card_index,
+                                                                                self.knowledge.player_template_ms(
+                                                                                    player_name))
+        print(f"Hands: {self.hands}")
+        print(f"Mental states: {self.knowledge.to_string(print_templates=True)}")
 
     def track_drawn_card(self, players: list):
         different_hands = 0
@@ -649,31 +675,39 @@ class Agent:
         self.hands[player].append(new_card)
         for p in self.players:
             if p != player:
-                self.knowledge.player_mental_state(p).update_whole_hand(new_card.rank, new_card.color)
+                self.knowledge.player_mental_state(p).update_whole_hand(new_card.value, colors.index(new_card.color))
 
     def update_knowledge_on_hint(self, hint_type: str, value, positions: list, destination: str):
         if destination == self.name:
-            if hint_type == 'rank':
+            if hint_type == 'value':
                 for index in positions:
                     self.knowledge.player_mental_state(destination).update_card(index, rank=value)
-                    fully_determined, rank, color = self.knowledge.player_mental_state(destination).get_card_from_index(index).is_fully_determined()
-                    if fully_determined:
+                    fully_determined_now, fully_determined, rank, color = self.knowledge.player_mental_state(destination).get_card_from_index(
+                        index).is_fully_determined_now()
+                    if fully_determined_now:
                         for player in self.players:
                             if player != self.name:
-                                self.knowledge.player_mental_state(player).card_drawn(rank, color)
+                                self.knowledge.player_mental_state(player).update_whole_hand(rank, color, fully_determined)
+                        self.knowledge.player_mental_state(destination).get_card_from_index(index).reset_fully_determined_now()
 
             else:
                 for index in positions:
-                    self.knowledge.player_mental_state(destination).update_card(index, color=value)
-                    fully_determined, rank, color = self.knowledge.player_mental_state(destination).get_card_from_index(index).is_fully_determined()
-                    if fully_determined:
+                    self.knowledge.player_mental_state(destination).update_card(index, color=colors.index(value))
+                    fully_determined_now, fully_determined, rank, color = self.knowledge.player_mental_state(destination).get_card_from_index(
+                        index).is_fully_determined_now()
+                    if fully_determined_now:
                         for player in self.players:
                             if player != self.name:
-                                self.knowledge.player_mental_state(player).card_drawn(rank, color)
+                                self.knowledge.player_mental_state(player).update_whole_hand(rank, color, fully_determined)
+                        self.knowledge.player_mental_state(destination).get_card_from_index(
+                            index).reset_fully_determined_now()
         else:
-            if hint_type == 'rank':
+            if hint_type == 'value':
                 for index in positions:
                     self.knowledge.player_mental_state(destination).update_card(index, rank=value)
             else:
                 for index in positions:
-                    self.knowledge.player_mental_state(destination).update_card(index, color=value)
+                    self.knowledge.player_mental_state(destination).update_card(index, color=colors.index(value))
+
+        print(f"Hands: {self.hands}")
+        print(f"Mental states: {self.knowledge.to_string()}")

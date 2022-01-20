@@ -87,7 +87,7 @@ def main():
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         request = GameData.ClientPlayerAddData(agent_name)
-        s.connect((HOST, PORT))
+        s.connect((ip, port))
         s.send(request.serialize())
         data = s.recv(DATASIZE)
         data = GameData.GameData.deserialize(data)
@@ -96,8 +96,8 @@ def main():
             s.send(GameData.ClientPlayerStartRequest(agent_name).serialize())
 
         cv = Condition()
-        Thread(target=agent_move_thread, args=(cv,)).start()
-
+        Thread(target=agent_move_thread).start()
+# , args=(cv,)
         while run:
             dataOk = False
             data = s.recv(DATASIZE)
@@ -133,7 +133,7 @@ def main():
                 else:
                     agent.track_drawn_card(data.players)
                 agent.assert_aligned_with_server(data.usedNoteTokens, data.usedStormTokens,
-                                                 data.tableCards, data.discardPile)
+                                                 data.tableCards, data.discardPile, data.players)
                 check_agent_turn(data.currentPlayer)
 
             # 4 received when someone performs an invalid action
@@ -154,7 +154,7 @@ def main():
                 agent.hint_gained()
 
                 if data.lastPlayer == agent_name:
-                    agent.discover_card(data.card, data.cardIndex, 'discard')
+                    agent.discover_card(data.card, data.cardHandIndex, 'discard')
                     print("Current player: " + data.player)
                     # possibly notify the condition variable
                     check_agent_turn(data.player)
@@ -171,7 +171,7 @@ def main():
                 agent.update_board(data.card)
 
                 if data.lastPlayer == agent_name:
-                    agent.discover_card(data.card, data.cardIndex, 'play')
+                    agent.discover_card(data.card, data.cardHandIndex, 'play')
                     print("Current player: " + data.player)
                     # possibly notify the condition variable
                     check_agent_turn(data.player)
@@ -189,7 +189,7 @@ def main():
                 agent.mistake_made()
 
                 if data.lastPlayer == agent_name:
-                    agent.discover_card(data.card, data.cardIndex, 'mistake')
+                    agent.discover_card(data.card, data.cardHandIndex, 'mistake')
                     print("Current player: " + data.player)
                     # possibly notify the condition variable
                     check_agent_turn(data.player)
@@ -217,7 +217,6 @@ def main():
             #     # * fare in modo che una carta FD faccia scattare l'aggiornamento più di una volta (attributi di classe fully_determined):
             #     #       -> function get_new_fully_determined_cards()
             #     #       -> function reset_recent_fully_determined_cards()
-            #     # ** probabile bug in agent.py, line 94
             #     #########################
             #
             #     # check if after THIS hint to agent the following update generated fully determined cards in agent's hand
