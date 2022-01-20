@@ -27,9 +27,9 @@ CARD_QUANTITIES = [3, 2, 2, 2, 1]
 
 
 class Agent:
-    '''
+    """
     Our AI Hanabi agent player
-    
+
     Attributes:
         name: The name of the agent
         currentPlayer: name of the current player in the game
@@ -43,12 +43,12 @@ class Agent:
         hints: The number of used note tokens
         errors: The number of used storm tokens
         last_action: The last performed action (card played/discarded) known to the agent
-    '''
+    """
 
     class MentalState:
-        '''
+        """
         Mental state representation for a single card in a player's hand.
-        
+
         Attributes:
             table:  A 2D numpy array representing the possible values of the card.
                     table[r][c] contains the number of cards with rank 'r' and color 'c' that
@@ -58,7 +58,7 @@ class Agent:
             state:  The state of the card, according to the Agent's knowledge.
                     (the possible values are the ones contained in the 'card_states' list)
             agent:  The agent that "owns" this mental state (i.e. card)
-        '''
+        """
 
         def __init__(self, agent):
             col = np.array(CARD_QUANTITIES)
@@ -70,34 +70,34 @@ class Agent:
             self.agent = agent
 
         def rank_hint_received(self, rank: int):
-            '''
+            """
             Update the mental state when a rank hint is received for this card.
             Calling this functions will fully determine the card's rank (setting all the other
             ranks in self.table to 0) and update the card's state according to the new information
 
             Args:
                 rank: the rank of the card
-            '''
+            """
             rank -= 1
             i = [j for j in range(HAND_SIZE) if j != rank]
             self.table[i, :] = 0
             self.update_card_state()
 
         def color_hint_received(self, color: int):
-            '''
+            """
             Update the mental state when a color hint is received for this card.
             Calling this functions will fully determine the card's color (setting all the other
             colors in self.table to 0) and update the card's state according to the new information
 
             Args:
                 color: the index of the color in the list 'colors'
-            '''
+            """
             i = [j for j in range(HAND_SIZE) if j != color]
             self.table[:, i] = 0
             self.update_card_state()
 
         def card_drawn(self, rank: int, color: int, is_template=False):
-            '''
+            """
             Remove a new discovered card from the "possibilities" of this card
             (i.e. self.table[rank][color] will be decremented by 1)
 
@@ -105,7 +105,7 @@ class Agent:
                 rank:   the rank of the new discovered card
                 color:  the index of new discovered card's color in the list 'colors'
                 is_template:
-            '''
+            """
             rank -= 1
             # self.table[rank, color] must be > 0
             # this assertion is technically wrong, if someone received an hint on a 4, all rows a part from the 4th
@@ -283,7 +283,6 @@ class Agent:
             else:
                 self.ms_hand[card_index].rank_hint_received(rank)
 
-
         def get_cards_from_state(self, state: int):
             """
             Get the hand's cards that have a certain state
@@ -399,7 +398,7 @@ class Agent:
             print("drawn card", new_card)
 
         def player_mental_state(self, player_name):
-            '''
+            """
             Get the PlayerMentalState of a certain player
 
             Args:
@@ -407,7 +406,7 @@ class Agent:
 
             Returns:
                 The PlayerMentalState of the desired player
-            '''
+            """
             return self.matrix[player_name]
 
         def player_template_ms(self, player_name):
@@ -428,14 +427,14 @@ class Agent:
             return s
 
     class LastAction:
-        '''
+        """
         Some informations about the last action (card played/discarded)
         performed in the game by a player
 
         Attributes:
             last_player:    The name of the player who performed the last action
-            card_index:     The index of the played/discarded card in the last_player's hand 
-        '''
+            card_index:     The index of the played/discarded card in the last_player's hand
+        """
 
         def __init__(self):
             self.last_player = None
@@ -447,14 +446,14 @@ class Agent:
             self.card = card
 
     def __init__(self, name: str, data: GameData.ServerGameStateData, players_names: list):
-        '''
+        """
         Create a new Agent
 
         Args:
             name: The name of the agent
             data: The game state to use to initialize the Agent
             players_names: The list of players names in turn order
-        '''
+        """
         self.name = name
         # name of the current player
         self.currentPlayer = data.currentPlayer
@@ -477,34 +476,34 @@ class Agent:
         self.maximums = [5] * 5
 
     def make_move(self):
-        '''
+        """
         Perform the best possible move according to the Agent's knowledge
 
         Returns:
             A GameData object representing the chosen move
-        '''
+        """
+        # TODO: make move
         return GameData.ClientPlayerPlayCardRequest(self.name, 0)
         cards = self.knowledge.player_mental_state(self.name).get_cards_from_state(1)
         print("cards_from_state", cards)
-        if (len(cards) > 0):
+        if len(cards) > 0:
             print("played a playable card")
             return GameData.ClientPlayerPlayCardRequest(self.name, cards[0])
         cards = self.knowledge.player_mental_state(self.name).get_cards_from_state(3)
-        if (len(cards) > 0):
+        if len(cards) > 0:
             print("discarded a useless card")
             return GameData.ClientPlayerDiscardCardRequest(self.name, cards[0])
         # TODO hint
         # print("discarded a random card")
         # return GameData.ClientPlayerDiscardCardRequest(self.name, 0)
 
-
     def update_last_action(self, data):
-        '''
+        """
         Update the last action (card played/discarded) known to the agent
 
         Args:
             data: The GameData object containing the action to register
-        '''
+        """
         # the action was "discarding a card"
         if type(data) is GameData.ServerActionValid:
             self.last_action.update_last_action(data.lastPlayer, data.cardHandIndex, data.card)
@@ -527,16 +526,16 @@ class Agent:
         #     self.hints += 1
 
     def update_knowledge(self, players: list):
-        '''
+        """
         Update the agent's knowledge (GlobalMentalState) according to the last performed action
         (card played/discarded)
 
         Args:
             players: The list of the players objects in turn order (must be consistent with self.players)
-        '''
+        """
         print("updating knowledge..")
         # if the agent is the one drawing a card, we have no information on the card
-        if (self.last_action.last_player == self.name):
+        if self.last_action.last_player == self.name:
             new_card = None
             self.knowledge.card_discovered(self.hands, self.last_action.last_player, self.last_action.card, new_card)
         else:
@@ -551,13 +550,13 @@ class Agent:
             self.last_action.card_index, self.knowledge.player_template_ms(self.last_action.last_player))
 
     def update_knowledge_on_hint_received(self, data: GameData.ServerHintData):
-        '''
+        """
         Update the agent's knowledge (GlobalMentalState) when an hint is sent from a player to another.
         (note that the destination of the hint doesn't have to be the agent itself)
 
         Args:
             data: the object describing the hint
-        '''
+        """
         self.hints += 1
 
         for pos in data.positions:
