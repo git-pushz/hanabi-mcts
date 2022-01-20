@@ -245,6 +245,7 @@ class Agent:
                 color:  the index of new discovered card's color in the list 'colors'
                 fully_determined: whether the card was fully determined or not
             """
+            rank -= 1
             if fully_determined is None:
                 for c in self.ms_hand:
                     c.card_drawn(rank, color)
@@ -356,7 +357,6 @@ class Agent:
             Update mental state template of each player
             """
             # it actually re-computes it
-            # TODO: VERIFY
             self.templates_ms = {k: Agent.MentalState(self.agent) for k in self.agent.hands.keys()}
             for name, hand in self.agent.hands.items():
                 for card in hand:
@@ -425,7 +425,7 @@ class Agent:
 
             if print_templates:
                 for k, v in self.templates_ms.items():
-                    s += f"template player {k}:\n {v.to_string()}\n"
+                    s += f"template player {k}:\n{v.to_string()}\n"
 
             return s
 
@@ -600,9 +600,10 @@ class Agent:
             # card wasn't fully determined
             for index in range(5):
                 if index != card_index:
-                    self.knowledge.player_mental_state(self.name).update_whole_hand(card.value,
-                                                                                    colors.index(card.color),
-                                                                                    fully_determined=True)
+                    # self.knowledge.player_mental_state(self.name).update_whole_hand(card.value,
+                    #                                                                 colors.index(card.color),
+                    #                                                                 fully_determined=False)
+                    self.knowledge.player_mental_state(self.name).get_card_from_index(index).card_drawn(card.value, colors.index(card.color))
                     fully_determined_now, fully_determined, rank, color = self.knowledge.player_mental_state(self.name)\
                         .get_card_from_index(index).is_fully_determined_now()
                     if fully_determined_now:
