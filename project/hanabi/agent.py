@@ -1,5 +1,7 @@
+from turtle import color
 import GameData
 import numpy as np
+import copy
 from game import Card
 
 colors = ["green", "yellow", "blue", "red", "white"]
@@ -185,13 +187,13 @@ class Agent():
                     print(f"color: {colors[c]} (index {c})")
                     print(f"Mental State of current card: {self.table}")
             else:  # I know nothing
-                if max(self.table == 1):
+                if np.max(self.table) == 1:
                     self.state = "risky"
                     return
-                elif min(self.table) > 1:
+                elif np.min(self.table) > 1:
                     self.state = "expendable"
                     return
-                else:
+                elif self.state != "none":
                     print("Should not be here")
 
 
@@ -212,7 +214,7 @@ class Agent():
         The mental states of all the cards in a player's hand
 
         Attributes:
-            ms_hand: A numpy array of mental states, one for each card in the player's hand
+            ms_hand: A list of mental states, one for each card in the player's hand
             agent: The agent this instance is referring to
         '''
         def __init__(self, agent):
@@ -462,6 +464,10 @@ class Agent():
             print("discarded a useless card")
             return GameData.ClientPlayerDiscardCardRequest(self.name, cards[0])
         # TODO hint
+        best_hint = self.decide_hint()
+        if best_hint != None:
+            print("giving an hint to the player: ", best_hint[2])
+            return GameData.ClientHintData(self.name, best_hint[2], best_hint[0], best_hint[1])
         print("discarded a random card")
         return GameData.ClientPlayerDiscardCardRequest(self.name, 0)
 
@@ -533,6 +539,117 @@ class Agent():
                 self.knowledge.player_mental_state(data.destination).update_card(pos, color=colors.index(data.value))
             if data.type == 'value':
                 self.knowledge.player_mental_state(data.destination).update_card(pos, rank=data.value)
+
+    # goals = ["play", "discard", "maydiscard", "keep"]
+    def decide_hint(self):
+        '''
+        Return an action, a tuple with action[0] = "value" or "color" and action[1] the rank or the color value
+        and action[2] the destination player
+        the action represents the best hint calculated by the agent (== None if no good hint has been found)
+        '''
+        best_score = -1
+        best_action = None
+        for name, _ in self.hands:
+            maxscore = -1
+            best_player_score = -1
+            action = None
+            best_player_action = None
+            if (name != self.name):
+                goals = self.calculate_goals(self.knowledge.player_mental_state(name))
+                print("for player ", name, "calculated the goals:")
+                print(goals)
+                for c in colors:
+                    move = self.predict(self.knowledge.player_mental_state(name), ("color", c))
+                    print(" for color", c, "predicted the moves:")
+                    print(move)
+                    score = self.compare(move, goals)
+                    print(" score of the hint:", score, "best_player_score: ", best_player_score)
+                    print(" ")
+                    if (score > maxscore):
+                        maxscore = score
+                        action = ("color", c, name)
+                for rank in range(5):
+                    move = self.predict(self.knowledge.player_mental_state(name), ("value", rank))
+                    print(" for rank", rank, "predicted the moves:")
+                    print(move)
+                    score = self.compare(move, goals)
+                    print(" score of the hint:", score, "best_player_score: ", best_player_score)
+                    print(" ")
+                    if (score > maxscore):
+                        maxscore = score
+                        action = ("value", rank, name)
+                if maxscore > 0:
+                    best_player_action = action
+                    best_player_score = maxscore
+            if best_player_score > best_score:
+                best_score = best_player_score
+                best_action = best_player_action
+            print("final score:", best_score)
+            print("best action: ", best_action)
+        return best_action
+    
+    def calculate_goals(self, hand):
+        '''
+        Return goals, a list that map for each card of the player hand a goal based on the full knowledge the agent
+        has about the player hand
+        '''
+        goals = []
+        for card in hand:
+            if self.compute_card_state(card) == "playable":
+                goals.append("play")
+            elif self.compute_card_state(card) == "useless":
+                goals.append("discard")
+            elif self.compute_card_state(card) == "expendable":
+                goals.append("maydiscard")
+            else:
+                goals.append("keep")
+        return goals
+
+    # action object examples: ("value", 2) or ("color", "red")
+    def predict(self, player_ms: PlayerMentalState, action):
+        ''' 
+        Returns predictions, a mapping for every card in player hand to a predicted action (the action
+        the agent expect the player to play if given the hint represented by the input object action
+        '''
+        # it needs to be added the check that an hint that doesn't target a color or rank in the player hand can't be given
+        # and that an hint that give no new information (i.e. M' = M) can't be given
+        predictions = []
+        ms = copy.deepcopy(player_ms)
+        if action[0] == "value":
+            ms.update_whole_hand(action[1], None)
+        else:
+            ms.update_whole_hand(None, action[1])
+        for card_ms in ms.ms_hand:
+            card_ms.update_card_state()
+            if card_ms.state == "playable":
+                predictions.append("play")
+            elif card_ms.state == "expendable" or card_ms.state == "useless":
+                predictions.append("discard")
+            else:
+                predictions.append("keep")
+        return predictions
+    
+    def compare(self, move, goals, hand):
+        '''
+        Return a score based on a comparison between the goals calculated by the agent and the move the agent predicted
+        the player would play (for each card) given a particular hint
+        '''
+        score = 0
+        for i, goal in enumerate(goals):
+            if goal == move[i]:
+                if goal == "play":
+                    score += 3
+                elif goal == "discard":
+                    if self.compute_card_state(hand[i]) == "useless":
+                        score += 2
+                    elif self.compute_card_state(hand[i]) == "expendable": 
+                        score += 1
+                # it means the player is playing a card they are not supposed to play
+                # or discarding a card they are not supposed to discard
+                # or keeping a card they are not supposed to keep
+                if goal != move[i]:
+                    return -1
+        return score
     
     def board_maximums(self):
         trash_colors = dict.fromkeys(colors, [])
@@ -547,6 +664,28 @@ class Agent():
                     break
 
         return maximums
+
+    def compute_card_state(self, card):
+        '''
+        Update the card's state according to the board, trash and other's player hand
+        it receive in input a card, not the mental state of the card
+        '''
+        if self.agent.board[colors.index(card.color)] == self.agent.maximums[colors.index(card.color)]:
+            return "useless"
+        elif self.agent.board[colors.index(card.color)] == card.rank - 1:
+            return "playable"
+        elif self.agent.board[color.index(card.color)] >= card.rank:
+            return "useless"
+        elif self.agent.maximums[color.index(card.color)] < card.rank-1:
+            return "useless"
+        elif self.table[card.rank, color.index(card.color)] == 1:
+            return "risky"
+        elif self.table[card.rank, color.index(card.color)] > 1:
+            return "expendable"
+        else:
+            print("Should not be here")
+            print(f"rank: {card.rank}, color: {card.color} (index {card.color})")
+            print(f"Mental State of current card: {self.table}")
 
 
     ## TODO
