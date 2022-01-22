@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 
 from sys import argv, stdout
+from tabnanny import verbose
 from threading import Thread
 from threading import Condition
 import GameData
 import socket
+import traceback
 from constants import *
-from agent import Agent
+from agent import Agent, DEBUG, VERBOSE
 import os
 
 import numpy as np
@@ -56,14 +58,17 @@ def main():
     def hint_action(destination, t, value):
         try:
             if t != "colour" and t != "color" and t != "value":
-                print("Error: type can be 'color' or 'value'")
+                if DEBUG:
+                    print("Error: type can be 'color' or 'value'")
             if t == "value":
                 value = int(value)
                 if int(value) > 5 or int(value) < 1:
-                    print("Error: card values can range from 1 to 5")
+                    if DEBUG:
+                        print("Error: card values can range from 1 to 5")
             else:
                 if value not in ["green", "red", "blue", "yellow", "white"]:
-                    print("Error: card color can only be green, red, blue, yellow or white")
+                    if DEBUG:
+                        print("Error: card color can only be green, red, blue, yellow or white")
             s.send(GameData.ClientHintData(agent_name, destination, t, value).serialize())
         except:
             print("Maybe you wanted to type 'hint <type> <destinatary> <value>'?")
@@ -71,13 +76,15 @@ def main():
     def agent_move_thread():
         with cv:
             while run:
-                print("waiting on cv")
+                if DEBUG or VERBOSE:
+                    print("waiting on cv")
                 cv.wait()  # wait for our turn
-                print("cv notified!")
+                if DEBUG or VERBOSE:
+                    print("cv notified!")
                 try:
                     s.send(agent.make_move().serialize())
-                except Exception as e:
-                    print(e)
+                except Exception:
+                    print(traceback.format_exc())
                 stdout.flush()
 
     def check_agent_turn(current_player: str):
@@ -92,7 +99,8 @@ def main():
         data = s.recv(DATASIZE)
         data = GameData.GameData.deserialize(data)
         if type(data) is GameData.ServerPlayerConnectionOk:
-            print("Connection accepted by the server. Welcome " + agent_name)
+            if DEBUG:
+                print("Connection accepted by the server. Welcome " + agent_name)
             s.send(GameData.ClientPlayerStartRequest(agent_name).serialize())
 
         cv = Condition()
@@ -108,7 +116,8 @@ def main():
             # 1 received when one player send the "ready"
             if type(data) is GameData.ServerPlayerStartRequestAccepted:
                 dataOk = True
-                print("Ready: " + str(data.acceptedStartRequests) + "/" + str(data.connectedPlayers) + " players")
+                if DEBUG:
+                    print("Ready: " + str(data.acceptedStartRequests) + "/" + str(data.connectedPlayers) + " players")
                 # data = s.recv(DATASIZE)
                 # data = GameData.GameData.deserialize(data)
 
@@ -129,7 +138,8 @@ def main():
 
                 if agent is None:
                     agent = Agent(agent_name, data, players)
-                    print(agent.knowledge.to_string())
+                    if DEBUG:
+                        print(agent.knowledge.to_string())
                 else:
                     agent.track_drawn_card(data.players)
                 agent.assert_aligned_with_server(data.usedNoteTokens, data.usedStormTokens,
@@ -249,10 +259,11 @@ def main():
             # 8 received when one player hints another player
             if type(data) is GameData.ServerHintData:
                 dataOk = True
-                print("Hint type: " + data.type)
-                print("Player " + data.destination + " cards with value " + str(data.value) + " are:")
-                for i in data.positions:
-                    print("\t" + str(i))
+                if DEBUG:
+                    print("Hint type: " + data.type)
+                    print("Player " + data.destination + " cards with value " + str(data.value) + " are:")
+                    for i in data.positions:
+                        print("\t" + str(i))
 
                 agent.hint_consumed()
                 if data.source != agent.name:
@@ -263,7 +274,8 @@ def main():
             # 9 received when the agent performs an action against the game rules (?)
             if type(data) is GameData.ServerInvalidDataReceived:
                 dataOk = True
-                print(data.data)
+                if DEBUG:
+                    print(data.data)
                 # something went wrong, it shouldn't happen
 
             # 10 received when the game is over for some reason
