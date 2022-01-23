@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
-
+import sys
 from sys import argv, stdout
-from tabnanny import verbose
 from threading import Thread
 from threading import Condition
 import GameData
@@ -10,7 +9,7 @@ import traceback
 from constants import *
 from agent import Agent, DEBUG, VERBOSE
 import os
-
+import traceback
 import numpy as np
 
 
@@ -79,10 +78,21 @@ def main():
                 if DEBUG or VERBOSE:
                     print("waiting on cv")
                 cv.wait()  # wait for our turn
+                if not run:
+                    break
                 if DEBUG or VERBOSE:
                     print("cv notified!")
                 try:
-                    s.send(agent.make_move().serialize())
+                    move = agent.make_move()
+                    if move is not None and VERBOSE:
+                        print(f"I chose the move {move.action}:")
+                        if hasattr(move, 'handCardOrdered'):
+                            print(f"\tCard: {move.handCardOrdered}")
+                        if hasattr(move, 'type') and hasattr(move, 'value'):
+                            print(f"\tHint: {move.type} {move.value} to {move.destination}")
+                    elif move is None:
+                        print("MOVE IS NONE")
+                    s.send(move.serialize())
                 except Exception:
                     print(traceback.format_exc())
                 stdout.flush()
@@ -105,7 +115,6 @@ def main():
 
         cv = Condition()
         Thread(target=agent_move_thread).start()
-# , args=(cv,)
         while run:
             dataOk = False
             data = s.recv(DATASIZE)
@@ -286,6 +295,8 @@ def main():
                 print(data.scoreMessage)
                 stdout.flush()
                 run = False
+                with cv:
+                    cv.notify()
                 # TODO: stop client thread (destroy CV ??)
 
             if not dataOk:

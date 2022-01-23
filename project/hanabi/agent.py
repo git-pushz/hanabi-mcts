@@ -4,8 +4,10 @@ import numpy as np
 import copy
 import sys
 from game import Card
+from collections import deque
 
 DEBUG = False
+HINT_DEBUG = True
 VERBOSE = True
 
 colors = ["red", "yellow", "green", "blue", "white"]
@@ -37,6 +39,19 @@ class Agent:
         errors: The number of used storm tokens
         last_action: The last performed action (card played/discarded) known to the agent
     """
+
+    # __COMPARE_BOARD = np.array([[3, -1, 0, 0, 0],
+    #                             [-1, 2, 1, 0, 0],
+    #                             [-1, 1, 1, 0, 0],
+    #                             [-1, -1, -1, 1, 1],
+    #                             [-1, -1, 0, 1, 0]])
+    __COMPARE_BOARD = np.array([[6, 0, 0, 0, 0],
+                                [0, 4, 0, 0, 0],
+                                [0, 0, 2, 0, 0],
+                                [0, 0, 0, 0, 0],
+                                [0, 0, 0, 0, 0]])
+
+    __GOALS_LABELS = ['play', 'discard', 'maydiscard', 'protect', 'keep']
 
     class MentalState:
         """
@@ -114,14 +129,18 @@ class Agent:
 
         def update_card_state(self):
             """
-            Update the card's state according to the currently known informations
+            Update the card's state according to the currently known information
             (stored in self.table)
             """
             if self.state == "useless":
                 return
             r, c = np.nonzero(self.table)
             # r is a numpy array of the row (=rank) indices of nonzero entries of self.table
+            # r is a numpy array of the row (=rank) indices of nonzero entries of self.table
             # c is a numpy array of the column (=color) indices of nonzero entries of self.table
+
+            # UPDATE: FROM PLAYABLE, A CARD CAN ONLY BECOME USELESS OR RISKY -> COVER THE CASE OF EXPENDABLE
+
             if len(r) == 1 and len(c) == 1:  # I know both
                 r, c = r[0] + 1, c[0]
                 self.fully_determined = True
@@ -138,10 +157,10 @@ class Agent:
                 elif self.agent.maximums[c] < r - 1:
                     self.state = "useless"
                     return
-                elif self.table[r-1, c] == 1:
+                elif self.table[r - 1, c] == 1:
                     self.state = "risky"
                     return
-                elif self.table[r-1, c] > 1:
+                elif self.table[r - 1, c] > 1 and self.state != 'playable':
                     self.state = "expendable"
                     return
                 else:
@@ -163,14 +182,14 @@ class Agent:
                 elif np.max(self.table[r - 1, :]) == 1:
                     self.state = "risky"
                     return
-                elif np.min(self.table[r - 1, :]) > 1:
+                elif np.min(self.table[r - 1, :]) > 1 and self.state != 'playable':
                     self.state = "expendable"
                     return
                 # the state remains "none"
                 # else:
-                    # print("Should not be here")
-                    # print(f"rank: {r}")
-                    # print(f"Mental State of current card:\n {self.table}")
+                # print("Should not be here")
+                # print(f"rank: {r}")
+                # print(f"Mental State of current card:\n {self.table}")
             elif len(np.unique(c)) == 1:  # I know only the color
                 c = c[0]
                 if self.agent.board[c] == self.agent.maximums[c]:
@@ -179,7 +198,7 @@ class Agent:
                 elif np.max(self.table[:, c]) == 1:
                     self.state = "risky"
                     return
-                elif np.min(self.table[:, c]) > 1:
+                elif np.min(self.table[:, c]) > 1 and self.state != 'playable':
                     self.state = "expendable"
                     return
                 # the state remains "none"
@@ -192,7 +211,7 @@ class Agent:
                 if np.max(self.table) == 1:
                     self.state = "risky"
                     return
-                elif np.min(self.table) > 1:
+                elif np.min(self.table) > 1 and self.state != 'playable':
                     self.state = "expendable"
                     return
                 else:
@@ -226,6 +245,8 @@ class Agent:
             s = "   r   y   g   b   w\n"
             s += '\n'.join([''.join(['{:4}'.format(item) for item in row]) for row in self.table])
             s += '\n'
+            if VERBOSE:
+                s += '\t' + 'state: ' + self.state + '\n'
             return s
 
     class PlayerMentalState:
@@ -286,7 +307,7 @@ class Agent:
             else:
                 self.ms_hand[card_index].rank_hint_received(rank)
 
-        def get_cards_from_state(self, state: int):
+        def get_cards_from_state(self, state: str):
             """
             Get the hand's cards that have a certain state
 
@@ -296,7 +317,7 @@ class Agent:
             Returns:
                 A list of indices of the cards in the specified state inside the hand
             """
-            return [idx[0] for idx, card in np.ndenumerate(self.ms_hand) if card.state == card_states[state]]
+            return [idx[0] for idx, card in np.ndenumerate(self.ms_hand) if card.state == state]
 
         def get_new_fully_determined_cards(self):
             """
@@ -457,6 +478,7 @@ class Agent:
             self.card_index = card_index
             self.card = card
 
+    # AGENT INIT
     def __init__(self, name: str, data: GameData.ServerGameStateData, players_names: list):
         """
         Create a new Agent
@@ -486,6 +508,7 @@ class Agent:
         self.errors = data.usedStormTokens
         self.last_action = Agent.LastAction()
         self.maximums = [5] * 5
+        self.__hint_history = deque(maxlen=4)
 
     def make_move(self):
         """
@@ -502,14 +525,14 @@ class Agent:
             print(f"\tHints used: {self.hints}")
             print(f"\tErrors made: {self.errors}")
 
-        cards = self.knowledge.player_mental_state(self.name).get_cards_from_state(1)
+        cards = self.knowledge.player_mental_state(self.name).get_cards_from_state("playable")
         if DEBUG:
             print("cards_from_state", cards)
         if len(cards) > 0:
             if DEBUG:
                 print("played a playable card")
             return GameData.ClientPlayerPlayCardRequest(self.name, cards[0])
-        cards = self.knowledge.player_mental_state(self.name).get_cards_from_state(3)
+        cards = self.knowledge.player_mental_state(self.name).get_cards_from_state("useless")
         if len(cards) > 0:
             if DEBUG:
                 print("discarded a useless card")
@@ -527,52 +550,52 @@ class Agent:
 
         return self.discard()
 
-
     def discard(self):
-        #Reminder -> card_states = ["none", "playable","expendable","useless","risky"] 
-        
-        #check if there are some useless cards in agent's hand...
-        cards = self.knowledge.player_mental_state(self.name).get_cards_from_state(3)
-        if(len(cards) > 0):
+        # Reminder -> card_states = ["none", "playable","expendable","useless","risky"]
+
+        # check if there are some useless cards in agent's hand...
+        cards = self.knowledge.player_mental_state(self.name).get_cards_from_state("useless")
+        if len(cards) > 0:
             if DEBUG:
                 print("discarded a useless card")
             return GameData.ClientPlayerDiscardCardRequest(self.name, np.random.choice(cards))
-        
-        #...if not check if there are some expendable cards in agent's hand
-        exp_cards = self.knowledge.player_mental_state(self.name).get_cards_from_state(2)
-        if (len(cards)==1):
-            if DEBUG:
+
+        # ...if not check if there are some expendable cards in agent's hand
+        cards = self.knowledge.player_mental_state(self.name).get_cards_from_state("expendable")
+        if len(cards) == 1:
+            if DEBUG or VERBOSE:
                 print("discarded an expendable card")
-            return GameData.ClientPlayerDiscardCardRequest(self.name, exp_cards[0])
-        if(len(cards) > 0):
-            #if agent has more than one expendable card in hand, discard the one with the highest rank
+            return GameData.ClientPlayerDiscardCardRequest(self.name, cards[0])
+        if len(cards) > 0:
+            # if agent has more than one expendable card in hand, discard the one with the highest rank
             ranks_list = []
-            for card_index in exp_cards:
-                #get ranks of expendable cards and add them to a list
-                rank, color = np.nonzero(self.knowledge.player_mental_state(self.name).get_card_from_index(card_index).get_table())
-                ranks_list.append((rank[0]+1))
-            #get the index of the max rank in the list, which is the same index of the corresponding card index in exp_cards
+            for card_index in cards:
+                # get ranks of expendable cards and add them to a list
+                rank, color = np.nonzero(
+                    self.knowledge.player_mental_state(self.name).get_card_from_index(card_index).get_table())
+                ranks_list.append((rank[0] + 1))
+            # get the index of the max rank in the list, which is the same index of the corresponding card index in exp_cards
             to_discard = ranks_list.index(max(ranks_list))
-            if DEBUG:
+            if DEBUG or VERBOSE:
                 print("discarded an expendable card")
-            return GameData.ClientPlayerDiscardCardRequest(self.name, exp_cards[to_discard])
+            return GameData.ClientPlayerDiscardCardRequest(self.name, cards[to_discard])
 
         # if here better discard a none card than a risky one, specifically the oldest one
-        cards = self.knowledge.player_mental_state(self.name).get_cards_from_state(0)
-        if(len(cards) > 0):
+        cards = self.knowledge.player_mental_state(self.name).get_cards_from_state("none")
+        if len(cards) > 0:
             if DEBUG:
                 print("discarded a none card")
             return GameData.ClientPlayerDiscardCardRequest(self.name, cards[0])
-        
+
         # last option, discard a risky one
-        cards = self.knowledge.player_mental_state(self.name).get_cards_from_state(4)
-        if(len(cards) > 0):
+        cards = self.knowledge.player_mental_state(self.name).get_cards_from_state("risky")
+        if len(cards) > 0:
             if DEBUG:
                 print("discarded a risky card")
             return GameData.ClientPlayerDiscardCardRequest(self.name, np.random.choice(cards))
 
+        print("HERE", '+'*50)
 
-    
     def update_last_action(self, data):
         """
         Update the last action (card played/discarded) known to the agent
@@ -643,11 +666,11 @@ class Agent:
                 self.knowledge.player_mental_state(data.destination).update_card(pos, rank=data.value)
 
     def decide_hint(self):
-        '''
+        """
         Return an action, a tuple with action[0] = "value" or "color" and action[1] the rank or the color value
         and action[2] the destination player
         the action represents the best hint calculated by the agent (== None if no good hint has been found)
-        '''
+        """
         if DEBUG:
             print("deciding if there is any good hint to give...")
         best_score = -1
@@ -659,53 +682,67 @@ class Agent:
             best_player_score = -1
             action = None
             best_player_action = None
-            if (name != self.name):
+            if name != self.name:
                 # goals = ["play", "discard", "maydiscard", "protect", "keep"]
                 goals = self.calculate_goals(hand)
-                if DEBUG:
+                if DEBUG or HINT_DEBUG:
                     print(" ")
                     print("for player ", name, "calculated the goals:")
                     print(goals)
                 for c in colors:
                     move = self.predict(self.knowledge.player_mental_state(name), ("color", c), hand)
-                    if DEBUG:
+                    if DEBUG or HINT_DEBUG:
                         print(" for color", c, "predicted the moves:")
                         print(" ", move)
                     score = self.compare(move, goals)
-                    if DEBUG:
+                    if DEBUG or HINT_DEBUG:
                         print("  score of the hint:", score, "best_player_score: ", best_player_score)
                         print(" ")
-                    if (score > maxscore):
+                    if score > maxscore:
                         maxscore = score
                         action = ("color", c, name)
                 for rank in range(1, 6):
                     move = self.predict(self.knowledge.player_mental_state(name), ("value", rank), hand)
-                    if DEBUG:
+                    if DEBUG or HINT_DEBUG:
                         print(" for rank", rank, "predicted the moves:")
                         print(" ", move)
                     score = self.compare(move, goals)
-                    if DEBUG:
+                    if DEBUG or HINT_DEBUG:
                         print("  score of the hint:", score)
                         print(" ")
-                    if (score > maxscore):
+                    if score > maxscore:
                         maxscore = score
                         action = ("value", rank, name)
                 if maxscore > 0:
                     best_player_action = action
                     best_player_score = maxscore
-            if best_player_score > best_score:
+            if best_player_score > best_score and best_player_action not in self.__hint_history:
                 best_score = best_player_score
                 best_action = best_player_action
-            if DEBUG:                
+            if DEBUG or HINT_DEBUG:
                 print("final score:", best_score)
                 print("best action: ", best_action)
+
+        if best_action is None:
+            players = copy.deepcopy(list(self.hands.keys()))
+            players.remove(self.name)
+            action = np.random.choice(["value", "color"])
+            value = None
+            if action == "value":
+                value = np.random.choice(range(5))
+            else:
+                value = np.random.choice(colors)
+            best_action = (action, value, np.random.choice(players))
+            print("BEST ACTION: ", best_action)
+
+        self.__hint_history.appendleft(best_action)
         return best_action
-    
+
     def calculate_goals(self, hand):
-        '''
+        """
         Return goals, a list that map for each card of the player hand a goal based on the full knowledge the agent
         has about the player hand
-        '''
+        """
         goals = []
         for card in hand:
             if self.compute_card_state(card) == "playable":
@@ -722,11 +759,11 @@ class Agent:
 
     # action object examples: ("value", 2) or ("color", "red")
     def predict(self, player_ms: PlayerMentalState, action, hand):
-        ''' 
+        """
         Returns predictions, a mapping for every card in player hand to a predicted action (the action
         the agent expect the player to play if given the hint represented by the input object action
-        '''
-        # it needs to be added the check that an hint that doesn't target a color or rank in the player hand can't be given
+        """
+        # TODO: add the check that an hint that doesn't target a color or rank in the player hand can't be given
         # and that an hint that give no new information (i.e. M' = M) can't be given
         predictions = []
         ms = copy.deepcopy(player_ms)
@@ -751,39 +788,43 @@ class Agent:
             else:
                 predictions.append("keep")
         return predictions
-    
+
     def compare(self, move, goals):
-        '''
+        """
         Return a score based on a comparison between the goals calculated by the agent and the move the agent predicted
         the player would play (for each card) given a particular hint
-        '''
+        """
+        # goals: what I would like the other player to do
+        # move: what the other player would do if he received the hint I'm considering in this iteration
         score = 0
-        for i, goal in enumerate(goals):
-            if goal == move[i]:
-                if goal == "play":
-                    score += 3
-                elif goal == "discard":
-                    score += 2
-                elif goal == "maydiscard":
-                    score += 1
-                elif goal == "protect":
-                    score += 1
-            if goal != move[i]:
-                if goal == "discard" or goal == "maydiscard":
-                    if move[i] == "discard" or move[i] == "maydiscard":
-                        score += 1
-                elif goal == "keep" or goal == "protect":
-                    if move[i] == "keep" or move[i] == "protect":
-                        score += 1
-                else:
-                    score -= 1
-                # it means the player is playing a card they are not supposed to play
-                # or discarding a card they are not supposed to discard
-                # or keeping a card they are not supposed to keep
-                # if goal == "play" and move[i] == "discard":
-                #     return -1
+        # for i, goal in enumerate(goals):
+        #     if goal == move[i]:
+        #         if goal == "play":
+        #             score += 3
+        #         elif goal == "discard":
+        #             score += 2
+        #         elif goal == "maydiscard":
+        #             score += 1
+        #         elif goal == "protect":
+        #             score += 1
+        #     if goal != move[i]:
+        #         if goal == "discard" or goal == "maydiscard":
+        #             if move[i] == "discard" or move[i] == "maydiscard":
+        #                 score += 1
+        #         elif goal == "keep" or goal == "protect":
+        #             if move[i] == "keep" or move[i] == "protect":
+        #                 score += 1
+        #         else:
+        #             score -= 1
+        #         # it means the player is playing a card they are not supposed to play
+        #         # or discarding a card they are not supposed to discard
+        #         # or keeping a card they are not supposed to keep
+        #         # if goal == "play" and move[i] == "discard":
+        #         #     return -1
+        for goal, m in zip(goals, move):
+            score += Agent.__COMPARE_BOARD[Agent.__GOALS_LABELS.index(goal), Agent.__GOALS_LABELS.index(m)]
         return score
-    
+
     def board_maximums(self):
         """
         Compute and return the maximum that each pile on the board can reach in the current game
@@ -812,7 +853,7 @@ class Agent:
             return "playable"
         elif self.board[colors.index(card.color)] >= card.value:
             return "useless"
-        elif self.maximums[colors.index(card.color)] < card.value-1:
+        elif self.maximums[colors.index(card.color)] < card.value - 1:
             return "useless"
         if card.value == 5:
             return "risky"
@@ -822,7 +863,7 @@ class Agent:
                 expendable = False
         # card.value == 1 is either playable or useless
         if expendable:
-            return "expendable" 
+            return "expendable"
         else:
             return "risky"
 
@@ -844,13 +885,16 @@ class Agent:
                     # self.knowledge.player_mental_state(self.name).update_whole_hand(card.value,
                     #                                                                 colors.index(card.color),
                     #                                                                 fully_determined=False)
-                    self.knowledge.player_mental_state(self.name).get_card_from_index(index).card_drawn(card.value, colors.index(card.color))
-                    fully_determined_now, fully_determined, rank, color = self.knowledge.player_mental_state(self.name)\
+                    self.knowledge.player_mental_state(self.name).get_card_from_index(index).card_drawn(card.value,
+                                                                                                        colors.index(
+                                                                                                            card.color))
+                    fully_determined_now, fully_determined, rank, color = self.knowledge.player_mental_state(self.name) \
                         .get_card_from_index(index).is_fully_determined_now()
                     if fully_determined_now:
                         for player in self.players:
                             if player != self.name:
-                                self.knowledge.player_mental_state(player).update_whole_hand(rank, color, fully_determined)
+                                self.knowledge.player_mental_state(player).update_whole_hand(rank, color,
+                                                                                             fully_determined)
 
             for player in self.players:
                 if player != self.name:
@@ -867,7 +911,7 @@ class Agent:
         self.knowledge.player_mental_state(self.name).reset_card_mental_state(card_index,
                                                                               self.knowledge.player_template_ms(
                                                                                   self.name))
-        if DEBUG:                                                                                  
+        if DEBUG:
             print(f"Hands: {self.hands}")
             print(f"Mental states: {self.knowledge.to_string(print_templates=True)}")
 
@@ -979,23 +1023,28 @@ class Agent:
             if hint_type == 'value':
                 for index in positions:
                     self.knowledge.player_mental_state(destination).update_card(index, rank=value)
-                    fully_determined_now, fully_determined, rank, color = self.knowledge.player_mental_state(destination).get_card_from_index(
+                    fully_determined_now, fully_determined, rank, color = self.knowledge.player_mental_state(
+                        destination).get_card_from_index(
                         index).is_fully_determined_now()
                     if fully_determined_now:
                         for player in self.players:
                             if player != self.name:
-                                self.knowledge.player_mental_state(player).update_whole_hand(rank, color, fully_determined)
-                        self.knowledge.player_mental_state(destination).get_card_from_index(index).reset_fully_determined_now()
+                                self.knowledge.player_mental_state(player).update_whole_hand(rank, color,
+                                                                                             fully_determined)
+                        self.knowledge.player_mental_state(destination).get_card_from_index(
+                            index).reset_fully_determined_now()
 
             else:
                 for index in positions:
                     self.knowledge.player_mental_state(destination).update_card(index, color=colors.index(value))
-                    fully_determined_now, fully_determined, rank, color = self.knowledge.player_mental_state(destination).get_card_from_index(
+                    fully_determined_now, fully_determined, rank, color = self.knowledge.player_mental_state(
+                        destination).get_card_from_index(
                         index).is_fully_determined_now()
                     if fully_determined_now:
                         for player in self.players:
                             if player != self.name:
-                                self.knowledge.player_mental_state(player).update_whole_hand(rank, color, fully_determined)
+                                self.knowledge.player_mental_state(player).update_whole_hand(rank, color,
+                                                                                             fully_determined)
                         self.knowledge.player_mental_state(destination).get_card_from_index(
                             index).reset_fully_determined_now()
         else:
@@ -1009,7 +1058,6 @@ class Agent:
         if DEBUG:
             print(f"Hands: {self.hands}")
             print(f"Mental states: {self.knowledge.to_string()}")
-
 
 # TODO
 ## when a card of the agent hand is fully determined add it to hands list
