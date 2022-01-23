@@ -163,6 +163,8 @@ def main():
                 print(data.message)
                 stdout.flush()
                 run = False
+                with cv:
+                    cv.notify()
 
             # 5 received when one player discards a card
             if type(data) is GameData.ServerActionValid:
@@ -285,6 +287,8 @@ def main():
                 dataOk = True
                 if DEBUG:
                     print(data.data)
+                with cv:
+                    cv.notify()
                 # something went wrong, it shouldn't happen
 
             # 10 received when the game is over for some reason

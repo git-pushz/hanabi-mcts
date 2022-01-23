@@ -544,7 +544,7 @@ class Agent:
             best_hint = self.decide_hint()
         else:
             best_hint = None
-        if best_hint != None:
+        if best_hint is not None:
             if DEBUG:
                 print("giving an hint to the player: ", best_hint[2])
             return GameData.ClientHintData(self.name, best_hint[2], best_hint[0], best_hint[1])
@@ -699,7 +699,7 @@ class Agent:
                         print(" ", move)
                     score = self.compare(move, goals)
                     if DEBUG or HINT_DEBUG:
-                        print("  score of the hint:", score, "best_player_score: ", best_player_score)
+                        print("  score of the hint:", score, "maxscore: ", maxscore)
                         print(" ")
                     if score > maxscore:
                         maxscore = score
@@ -711,7 +711,7 @@ class Agent:
                         print(" ", move)
                     score = self.compare(move, goals)
                     if DEBUG or HINT_DEBUG:
-                        print("  score of the hint:", score)
+                        print("  score of the hint:", score, "maxscore: ", maxscore)
                         print(" ")
                     if score > maxscore:
                         maxscore = score
@@ -727,6 +727,7 @@ class Agent:
                 print("best action: ", best_action)
 
         if best_action is None:
+            print(f"History: {self.__hint_history}")
             players = copy.deepcopy(list(self.hands.keys()))
             players.remove(self.name)
             action = np.random.choice(["value", "color"])
