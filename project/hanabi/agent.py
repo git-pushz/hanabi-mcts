@@ -1,4 +1,3 @@
-from turtle import color
 import GameData
 import numpy as np
 import copy
@@ -140,7 +139,9 @@ class Agent:
             # c is a numpy array of the column (=color) indices of nonzero entries of self.table
 
             # UPDATE: FROM PLAYABLE, A CARD CAN ONLY BECOME USELESS OR RISKY -> COVER THE CASE OF EXPENDABLE
-
+            if VERBOSE:
+                if len(r) == 0 and len(c) == 0:
+                    print("ERROR: MENTAL STATE TOTALLY EMPTY")
             if len(r) == 1 and len(c) == 1:  # I know both
                 r, c = r[0] + 1, c[0]
                 self.fully_determined = True
@@ -489,6 +490,7 @@ class Agent:
             data: The game state to use to initialize the Agent
             players_names: The list of players names in turn order
         """
+        np.random.seed(27)
         self.name = name
         # name of the current player
         self.currentPlayer = data.currentPlayer
@@ -522,7 +524,10 @@ class Agent:
         """
         if VERBOSE:
             print(f"Player {self.name}:")
-            print(f"\tBoard: {self.board}")
+            print(f"\tBoard:\n[")
+            for i, b in enumerate(self.board):
+                print(f"\t{colors[i]}: {b}")
+            print("]")
             print(f"\tTrash: {self.trash}")
             print(f"\tHands: {self.hands}")
             print(f"\tHints used: {self.hints}")
@@ -576,6 +581,8 @@ class Agent:
                 # get ranks of expendable cards and add them to a list
                 rank, color = np.nonzero(
                     self.knowledge.player_mental_state(self.name).get_card_from_index(card_index).get_table())
+                if len(rank) == 0:
+                    print("==="*20)
                 ranks_list.append((rank[0] + 1))
             # get the index of the max rank in the list, which is the same index of the corresponding card index in exp_cards
             to_discard = ranks_list.index(max(ranks_list))
