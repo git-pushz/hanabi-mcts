@@ -74,6 +74,9 @@ class Model:
 
 
 class GameMove:
+    '''
+    describe the move contained in one node of the tree
+    '''
     def __init__(self, player, position):
         self.player = player
         self.position = position
