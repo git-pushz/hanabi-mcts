@@ -480,6 +480,7 @@ class Agent:
 
     # AGENT INIT
     def __init__(self, name: str, data: GameData.ServerGameStateData, players_names: list):
+        global HAND_SIZE
         """
         Create a new Agent
 
@@ -493,6 +494,8 @@ class Agent:
         self.currentPlayer = data.currentPlayer
         # list of players in turn order
         self.players = players_names
+        if len(players_names) >= 4:
+            HAND_SIZE = 4
         # position of the player in the round
         self.nr = self.players.index(self.name)
         # hands[player_name] = list of cards
