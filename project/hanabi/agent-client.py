@@ -5,12 +5,10 @@ from threading import Thread
 from threading import Condition
 import GameData
 import socket
-import traceback
 from constants import *
-from agent import Agent, DEBUG, VERBOSE
+from agent import Agent, DEBUG, VERBOSE, LOG
 import os
 import traceback
-import numpy as np
 
 
 def main():
@@ -84,12 +82,20 @@ def main():
                     print("cv notified!")
                 try:
                     move = agent.make_move()
-                    if move is not None and VERBOSE:
-                        print(f"I chose the move {move.action}:")
-                        if hasattr(move, 'handCardOrdered'):
-                            print(f"\tCard: {move.handCardOrdered}")
-                        if hasattr(move, 'type') and hasattr(move, 'value'):
-                            print(f"\tHint: {move.type} {move.value} to {move.destination}")
+                    if move is not None:
+                        if VERBOSE:
+                            print(f"At turn {agent.turn} I chose the move {move.action}:")
+                            if hasattr(move, 'handCardOrdered'):
+                                print(f"\tCard: {move.handCardOrdered}")
+                            if hasattr(move, 'type') and hasattr(move, 'value'):
+                                print(f"\tHint: {move.type} {move.value} to {move.destination}")
+                        if LOG:
+                            with open(agent.FILE, 'a') as f:
+                                f.write(f"At turn {agent.turn} I chose the move {move.action}:\n")
+                                if hasattr(move, 'handCardOrdered'):
+                                    f.write(f"\tCard: {move.handCardOrdered}\n")
+                                if hasattr(move, 'type') and hasattr(move, 'value'):
+                                    f.write(f"\tHint: {move.type} {move.value} to {move.destination}\n")
                     elif move is None:
                         print("MOVE IS NONE")
                     s.send(move.serialize())
@@ -163,6 +169,9 @@ def main():
                 print(data.message)
                 stdout.flush()
                 run = False
+                # decrement turn because this notify will make the agent take another decision (in the current turn)
+                # in the make_move, which by default increments the turns count
+                agent.turn -= 1
                 with cv:
                     cv.notify()
 
@@ -287,6 +296,9 @@ def main():
                 dataOk = True
                 if DEBUG:
                     print(data.data)
+                # decrement turn because this notify will make the agent take another decision (in the current turn)
+                # in the make_move, which by default increments the turns count
+                agent.turn -= 1
                 with cv:
                     cv.notify()
                 # something went wrong, it shouldn't happen
