@@ -84,14 +84,14 @@ def main():
                     move = agent.make_move()
                     if move is not None:
                         if VERBOSE:
-                            print(f"At turn {agent.turn} I chose the move {move.action}:")
+                            print(f"At turn {agent.turn} I chose the action {move.action}:")
                             if hasattr(move, 'handCardOrdered'):
                                 print(f"\tCard: {move.handCardOrdered}")
                             if hasattr(move, 'type') and hasattr(move, 'value'):
                                 print(f"\tHint: {move.type} {move.value} to {move.destination}")
                         if LOG:
                             with open(agent.FILE, 'a') as f:
-                                f.write(f"At turn {agent.turn} I chose the move {move.action}:\n")
+                                f.write(f"At turn {agent.turn} I chose the action {move.action}:\n")
                                 if hasattr(move, 'handCardOrdered'):
                                     f.write(f"\tCard: {move.handCardOrdered}\n")
                                 if hasattr(move, 'type') and hasattr(move, 'value'):
@@ -168,10 +168,10 @@ def main():
                 print("Invalid action performed. Reason:")
                 print(data.message)
                 stdout.flush()
-                run = False
+                # run = False
                 # decrement turn because this notify will make the agent take another decision (in the current turn)
                 # in the make_move, which by default increments the turns count
-                agent.turn -= 1
+                agent.turn -= len(agent.players)
                 with cv:
                     cv.notify()
 
@@ -284,7 +284,6 @@ def main():
                     print("Player " + data.destination + " cards with value " + str(data.value) + " are:")
                     for i in data.positions:
                         print("\t" + str(i))
-
                 agent.hint_consumed()
                 if data.source != agent.name:
                     agent.update_knowledge_on_hint(data.type, data.value, data.positions, data.destination)

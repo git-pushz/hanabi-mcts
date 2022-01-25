@@ -706,6 +706,7 @@ class Agent:
             print("no good hint found..")
 
         exc_time = time.time()
+        assert self.hints > 0, "I'm going to try to discard with zero used tokens"
         discard_action = self.discard()
         if LOG and TIME:
             with open(self.FILE, 'a') as f:
@@ -759,75 +760,6 @@ class Agent:
             return GameData.ClientPlayerDiscardCardRequest(self.name, np.random.choice(cards))
 
         print("HERE", '+'*50)
-
-    def update_last_action(self, data):
-        """
-        Update the last action (card played/discarded) known to the agent
-
-        Args:
-            data: The GameData object containing the action to register
-        """
-        # the action was "discarding a card"
-        if type(data) is GameData.ServerActionValid:
-            self.last_action.update_last_action(data.lastPlayer, data.cardHandIndex, data.card)
-            self.trash.append(data.card)
-            self.maximums = self.board_maximums()
-        # the action was "successfully playing a card"
-        if type(data) is GameData.ServerPlayerMoveOk:
-            self.last_action.update_last_action(data.lastPlayer, data.cardHandIndex, data.card)
-            self.played.append(data.card)
-            self.board[colors.index(data.card.color)] += 1
-        # the action was "unsuccessfully playing a card"
-        if type(data) is GameData.ServerPlayerThunderStrike:
-            self.last_action.update_last_action(data.lastPlayer, data.cardHandIndex, data.card)
-            self.trash.append(data.card)
-            self.maximums = self.board_maximums()
-            self.errors += 1
-            self.trash.append(data.card)
-        # if type(data) is GameData.ServerHintData:
-        #     self.last_action.update_last_action(data.lastPlayer, data.cardHandIndex)
-        #     self.hints += 1
-
-    # def update_knowledge(self, players: list):
-    #     """
-    #     Update the agent's knowledge (GlobalMentalState) according to the last performed action
-    #     (card played/discarded)
-    #
-    #     Args:
-    #         players: The list of the players objects in turn order (must be consistent with self.players)
-    #     """
-    #     if DEBUG:
-    #         print("updating knowledge..")
-    #     # if the agent is the one drawing a card, we have no information on the card
-    #     if self.last_action.last_player == self.name:
-    #         new_card = None
-    #         self.knowledge.card_discovered(self.hands, self.last_action.last_player, self.last_action.card, new_card)
-    #     else:
-    #         new_card = players[self.players.index(self.last_action.last_player)].hand[-1]
-    #         self.knowledge.card_discovered(self.hands, self.last_action.last_player, self.last_action.card, new_card)
-    #         # update player hand with new card
-    #         self.hands[self.last_action.last_player] = players[self.players.index(self.last_action.last_player)].hand
-    #     # update mental state templates for all players
-    #     self.knowledge.update_templates_ms()
-    #     # update mental state of "card_index"th card of the player who drawn a new card
-    #     self.knowledge.player_mental_state(self.last_action.last_player).reset_card_mental_state(
-    #         self.last_action.card_index, self.knowledge.player_template_ms(self.last_action.last_player))
-    #
-    def update_knowledge_on_hint_received(self, data: GameData.ServerHintData):
-        """
-        Update the agent's knowledge (GlobalMentalState) when an hint is sent from a player to another.
-        (note that the destination of the hint doesn't have to be the agent itself)
-
-        Args:
-            data: the object describing the hint
-        """
-        self.hints += 1
-
-        for pos in data.positions:
-            if data.type == 'color':
-                self.knowledge.player_mental_state(data.destination).update_card(pos, color=colors.index(data.value))
-            if data.type == 'value':
-                self.knowledge.player_mental_state(data.destination).update_card(pos, rank=data.value)
 
     def decide_hint(self):
         """
@@ -1069,10 +1001,10 @@ class Agent:
         return maximums
 
     def compute_card_state(self, card):
-        '''
+        """
         Update the card's state according to the board, trash and other's player hand
         it receive in input a card, not the mental state of the card
-        '''
+        """
         if self.board[colors.index(card.color)] == self.maximums[colors.index(card.color)]:
             return "useless"
         elif self.board[colors.index(card.color)] == card.value - 1:
@@ -1159,11 +1091,14 @@ class Agent:
             card: the discarded card
         """
         self.trash.append(card)
+        self.maximums = self.board_maximums()
 
     def hint_consumed(self):
         """
         Increment (if possible) the count of used hint tokens
         """
+        if self.hints == 0:
+            print('x'*100, "\nZERO")
         self.hints = min(self.hints + 1, 8)
 
     def hint_gained(self):
