@@ -12,7 +12,7 @@ from constants import SEED
 DEBUG = False
 HINT_DEBUG = False
 VERBOSE = True
-LOG = False
+LOG = True
 TIME = False
 
 
@@ -104,7 +104,7 @@ class Agent:
             agent:  The agent that "owns" this mental state (i.e. card)
         """
 
-        def __init__(self, agent, card_index=None):
+        def __init__(self, agent, card_index=None, player=None):
             col = np.array(CARD_QUANTITIES)
             col = col.reshape(col.size, 1)
             self.table = np.tile(col, len(colors))
@@ -112,6 +112,7 @@ class Agent:
             self.fully_determined_now = False
             self.state = card_states[0]
             self.agent = agent
+            self.player = player
             if card_index is not None:
                 self.card_index = card_index
             if LOG:
@@ -119,9 +120,7 @@ class Agent:
                     f.write("just created new MS\n")
                     f.write(self.to_string())
 
-        def __deepcopy__(self, memo=None):
-            if memo is None:
-                memo = {}
+        def __deepcopy__(self, memo={}):
             cls = self.__class__
             result = cls.__new__(cls)
             # del result.table
@@ -130,16 +129,10 @@ class Agent:
             result.fully_determined_now = self.fully_determined_now
             result.state = copy.copy(self.state)
             result.agent = self.agent
+            result.player = self.player
             if hasattr(self, 'card_index'):
                 result.card_index = self.card_index
             return result
-
-        def create_copy(self):
-            self_copy = Agent.MentalState(self.agent, self.card_index)
-            self_copy.table = np.copy(self.table)
-            self_copy.fully_determined = self.fully_determined
-            self_copy.fully_determined_now = self.fully_determined_now
-            self_copy.state = copy.copy(self.state)
 
         def rank_hint_received(self, rank: int):
             """
@@ -217,6 +210,8 @@ class Agent:
                 return
             ## TODO
             self.table[rank, color] -= 1
+            if np.any(self.table < 0):
+                print("******NEGATIVE******")
             if is_template:
                 return
             self.update_card_state()
@@ -350,7 +345,11 @@ class Agent:
 
         def to_string(self) -> str:
             if self.card_index is not None:
-                s = f">MS of card index {self.card_index}\n"
+                if not hasattr(self, 'player') or self.player is None:
+                    player = "***PLAYER***"
+                else:
+                    player = self.player
+                s = f">MS of player {player} at card index {self.card_index}\n"
             else:
                 s = ''
             s += "   r   y   g   b   w\n"
@@ -369,13 +368,11 @@ class Agent:
             agent: The agent this instance is referring to
         """
 
-        def __init__(self, agent):
-            self.ms_hand = [Agent.MentalState(agent, i) for i in range(HAND_SIZE)]
+        def __init__(self, agent, player=None):
+            self.ms_hand = [Agent.MentalState(agent, i, player) for i in range(HAND_SIZE)]
             self.agent = agent
 
-        def __deepcopy__(self, memo=None):
-            if memo is None:
-                memo = {}
+        def __deepcopy__(self, memo={}):
             cls = self.__class__
             result = cls.__new__(cls)
             # del result.ms_hand
@@ -403,6 +400,8 @@ class Agent:
                     if not c.fully_determined_now:
                         ## TODO
                         c.get_table()[rank, color] -= 1
+                        if np.any(c.table < 0):
+                            print("****NEGATIVE****")
 
         # def reset_recent_fully_determined_cards(self):
         #     """
@@ -444,7 +443,7 @@ class Agent:
             """
             Return the index of all RECENT Fully Determined cards in a hand/PlayerMentalState, specifically a list of MentalStates
             """
-            return [idx[0] for idx, card in np.ndenumerate(self.ms_hand) if
+            return [idx for idx, card in enumerate(self.ms_hand) if
                     (card.fully_determined and card.fully_determined_now)]
 
         def get_card_from_index(self, index: int):
@@ -489,14 +488,14 @@ class Agent:
         """
 
         def __init__(self, hands: dict, agent):
-            self.matrix = {k: Agent.PlayerMentalState(agent) for k in hands.keys()}
+            self.matrix = {k: Agent.PlayerMentalState(agent, k) for k in hands.keys()}
             # it is used to store information of the past knowledge of the match
             # used as the starting mental state for newly drawn cards by the agent
             # it is updated in 3 cases:
             # at MentalStateGlobal initialization X
             # when a card is drawn X
             # when a card of the agent hand is fully determined
-            self.templates_ms = {k: Agent.MentalState(agent, -1) for k in hands.keys()}
+            self.templates_ms = {k: Agent.MentalState(agent, 'TEMPLATE', k) for k in hands.keys()}
             self.agent = agent
 
             for name, hand in hands.items():
@@ -511,7 +510,7 @@ class Agent:
             Update mental state template of each player
             """
             # it actually re-computes it
-            self.templates_ms = {k: Agent.MentalState(self.agent, -1) for k in self.agent.hands.keys()}
+            self.templates_ms = {k: Agent.MentalState(self.agent, 'TEMPLATE', k) for k in self.agent.hands.keys()}
             for name, hand in self.agent.hands.items():
                 for card in hand:
                     for n in self.agent.hands.keys():
@@ -619,9 +618,8 @@ class Agent:
         self.name = name
         if LOG:
             self.FILE = f"LOG{self.name}.log"
-            with open(self.FILE, 'w'):
-                pass
-        self.turn = 0
+            with open(self.FILE, 'w') as f:
+                f.write(f"BEGIN LOG OF PLAYER {self.name}\n")
         # name of the current player
         self.currentPlayer = data.currentPlayer
         # list of players in turn order
@@ -630,6 +628,7 @@ class Agent:
             HAND_SIZE = 4
         # position of the player in the round
         self.nr = self.players.index(self.name)
+        self.turn = self.nr+1
         # hands[player_name] = list of cards
         self.hands = {player.name: player.hand for player in data.players}
         self.hands[self.name] = []
@@ -652,7 +651,7 @@ class Agent:
         Returns:
             A GameData object representing the chosen move
         """
-        self.turn += 1
+        self.turn += len(self.players)
         if VERBOSE:
             print(f"Player {self.name}:")
             print(f"\tBoard:\n[")
@@ -956,11 +955,11 @@ class Agent:
         """
         # TODO: add the check that an hint that doesn't target a color or rank in the player hand can't be given
         # and that an hint that give no new information (i.e. M' = M) can't be given
-        # LOG = False
+        LOG = False
         predictions = []
         exc_time = time.time()
         ms = copy.deepcopy(player_ms)
-        if LOG:
+        if LOG and TIME:
             with open(self.FILE, 'a') as f:
                 f.write(f"Size of object to deepcopy: {get_size(player_ms)}\n")
                 f.write(f"At turn {self.turn} the deepcopy inside predict function took {int(time.time() - exc_time)} seconds\n")
@@ -1013,7 +1012,7 @@ class Agent:
                 f.write('\nEND\n')
                 f.write("*" * 40)
                 f.write('\n')
-        # LOG = True
+        LOG = True
         return predictions
 
     def compare(self, move, goals):
