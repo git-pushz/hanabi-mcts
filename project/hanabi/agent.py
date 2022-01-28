@@ -76,16 +76,16 @@ class Agent:
         last_action: The last performed action (card played/discarded) known to the agent
     """
 
-    # __COMPARE_BOARD = np.array([[3, -1, 0, 0, 0],
-    #                             [-1, 2, 1, 0, 0],
-    #                             [-1, 1, 1, 0, 0],
-    #                             [-1, -1, -1, 1, 1],
-    #                             [-1, -1, 0, 1, 0]])
-    __COMPARE_BOARD = np.array([[3, 0, 0, 0, 0],
-                                [0, 2, 0, 0, 0],
-                                [0, 0, 1, 0, 0],
-                                [0, 0, 0, 0, 0],
-                                [0, 0, 0, 0, 0]])
+    __COMPARE_BOARD = np.array([[3, -1, 0, 0, 0],
+                                [-1, 2, 1, 0, 0],
+                                [-1, 1, 1, 0, 0],
+                                [-1, -1, -1, 1, 1],
+                                [-1, -1, 0, 1, 0]])
+    # __COMPARE_BOARD = np.array([[3, 0, 0, 0, 0],
+    #                             [0, 2, 0, 0, 0],
+    #                             [0, 0, 1, 0, 0],
+    #                             [0, 0, 0, 0, 0],
+    #                             [0, 0, 0, 0, 0]])
 
     __GOALS_LABELS = ['play', 'discard', 'maydiscard', 'protect', 'keep']
 
@@ -463,10 +463,10 @@ class Agent:
             if DEBUG:
                 print("appending the mental state template")
                 print(player_ms_template.to_string())
-            for i in range(4):
+            for i in range(HAND_SIZE-1):
                 self.ms_hand[i].card_index = i
             ms: Agent.MentalState = copy.deepcopy(player_ms_template)
-            ms.card_index = 4
+            ms.card_index = HAND_SIZE-1
             self.ms_hand.append(ms)
 
         def to_string(self) -> str:
@@ -626,6 +626,9 @@ class Agent:
         self.players = players_names
         if len(players_names) >= 4:
             HAND_SIZE = 4
+            self.max_hand_size = 4
+        else:
+            self.max_hand_size = 5
         # position of the player in the round
         self.nr = self.players.index(self.name)
         self.turn = self.nr+1
@@ -686,7 +689,7 @@ class Agent:
                 print("played a playable card")
             return GameData.ClientPlayerPlayCardRequest(self.name, cards[0])
         cards = self.knowledge.player_mental_state(self.name).get_cards_from_state("useless")
-        if len(cards) > 0:
+        if len(cards) > 0 and self.hints > 0:
             if DEBUG:
                 print("discarded a useless card")
             return GameData.ClientPlayerDiscardCardRequest(self.name, cards[0])
@@ -1038,7 +1041,7 @@ class Agent:
         card_ms: Agent.MentalState = ms.get_card_from_index(card_index)
         if not card_ms.fully_determined:
             # card wasn't fully determined
-            for index in range(5):
+            for index in range(HAND_SIZE):
                 if index != card_index:
                     # self.knowledge.player_mental_state(self.name).update_whole_hand(card.value,
                     #                                                                 colors.index(card.color),
@@ -1097,8 +1100,6 @@ class Agent:
         """
         Increment (if possible) the count of used hint tokens
         """
-        if self.hints == 0:
-            print('x'*100, "\nZERO")
         self.hints = min(self.hints + 1, 8)
 
     def hint_gained(self):

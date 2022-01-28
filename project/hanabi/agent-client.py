@@ -5,8 +5,10 @@ from threading import Thread
 from threading import Condition
 import GameData
 import socket
+
+import agent
 from constants import *
-from agent import Agent, DEBUG, VERBOSE, LOG
+from agent import Agent, DEBUG, VERBOSE, LOG, HAND_SIZE
 import os
 import traceback
 
@@ -168,7 +170,7 @@ def main():
                 print("Invalid action performed. Reason:")
                 print(data.message)
                 stdout.flush()
-                # run = False
+                run = False
                 # decrement turn because this notify will make the agent take another decision (in the current turn)
                 # in the make_move, which by default increments the turns count
                 agent.turn -= len(agent.players)
@@ -190,7 +192,7 @@ def main():
                     check_agent_turn(data.player)
                 else:
                     agent.track_played_card(data.lastPlayer, data.cardHandIndex)
-                    if data.handLength == 5:
+                    if data.handLength == agent.max_hand_size:
                         show_action()
 
             # 6 received when one player plays a card correctly
@@ -207,7 +209,7 @@ def main():
                     check_agent_turn(data.player)
                 else:
                     agent.track_played_card(data.lastPlayer, data.cardHandIndex)
-                    if data.handLength == 5:
+                    if data.handLength == agent.max_hand_size:
                         show_action()
 
             # 7 received when one player makes a mistake
@@ -225,7 +227,7 @@ def main():
                     check_agent_turn(data.player)
                 else:
                     agent.track_played_card(data.lastPlayer, data.cardHandIndex)
-                    if data.handLength == 5:
+                    if data.handLength == agent.max_hand_size:
                         show_action()
 
             # 8 received when one player hints another player
