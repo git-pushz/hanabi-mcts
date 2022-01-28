@@ -1,10 +1,13 @@
+from typing import List
+
 from game_state import GameState, Card
 from .. import GameData
+
 
 class Agent:
     def __init__(self, name: str, data: GameData.ServerGameStateData, players_names: list):
         self.name = name
-        self._game_state = GameState(player_names, name, data)
+        self._game_state = GameState(players_names, name, data)
 
     def make_move(self) -> None:
         """
@@ -27,8 +30,7 @@ class Agent:
         assert different_hands == 1, "too many different cards"
 
         assert player != self.name, "Cannot discover my cards"
-        self._game_state.append_card_to_player_hand(player, Card(new_card.value, new_new_card.color))
-
+        self._game_state.append_card_to_player_hand(player, Card(new_card.value, new_card.color))
 
     def track_played_card(self, player: str, card_idx: int) -> None:
         """
@@ -38,7 +40,7 @@ class Agent:
     def update_trash(self, card) -> None:
         """
         """
-        self._game_state.update_trash(Card(card=card.value, color=card.color))
+        self._game_state.update_trash(Card(rank=card.value, color=card.color))
 
     def hint_gained(self) -> None:
         """
@@ -70,7 +72,7 @@ class Agent:
         """
         pass
 
-    def update_knowledge_on_hint(self, hint_type: str, hint_value: int, cards_idx: list[int], destination: str) -> None:
+    def update_knowledge_on_hint(self, hint_type: str, hint_value: int, cards_idx: List[int], destination: str) -> None:
         """
         """
         pass

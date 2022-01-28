@@ -1,5 +1,5 @@
 from math import fabs
-from libs.model import PLAYER1, PLAYER2, Model, GameMove
+from model import Model, GameMove
 from .tree import Tree, Node
 from functools import reduce
 import numpy as np

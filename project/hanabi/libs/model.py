@@ -74,15 +74,16 @@ class GameMove:
 
     def __eq__(self, other):
         equal = self.player == other.player and self.action_type == other.action_type
-        if action_type == "hint":
-            equal = (
-                equal
-                and self.destination == other.destination
-                and self.hint_type == other.hint_type
-                and self.hint_value == other.hint_value
-            )
-        else:
-            equal = equal and self.card_idx == other.card_idx
+        if equal:
+            if self.action_type == "hint":
+                equal = (
+                    equal
+                    and self.destination == other.destination
+                    and self.hint_type == other.hint_type
+                    and self.hint_value == other.hint_value
+                )
+            else:
+                equal = equal and self.card_idx == other.card_idx
         return equal
 
     def __ne__(self, other):
