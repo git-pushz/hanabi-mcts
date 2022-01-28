@@ -113,6 +113,7 @@ class Trash:
         )
         self._table[rank - 1][color] -= 1
         if self._table[rank - 1][color] == 0:
+            # TODO: color not ok for index
             self.maxima[color] = min(rank - 1, self.maxima[color])
 
     def append(self, card: Card) -> None:
@@ -144,7 +145,7 @@ class GameState:
         Create a new GameState
 
         Args:
-            player_names: the list of the player names in turn order
+            players_names: the list of the player names in turn order
             root_player_name: the name of the root player (agent)
             data: the server game state to use to initialize the client game state
         """
@@ -239,13 +240,14 @@ class GameState:
     def mistake_made(self) -> None:
         """
         """
-        if self.errors >= MAX_ERROR:
+        if self.errors >= MAX_ERRORS:
             raise RuntimeError("Too many error tokens")
         self.errors += 1
 
     def card_correctly_played(self, color: Color) -> None:
         """
         """
+        # TODO: color not ok for index
         if self.board[color] >= self.trash.maxima[color]:
             raise RuntimeError("Trying to play a card that doesn't exists")
         self.board[color] += 1
@@ -358,6 +360,7 @@ class MCTSState(GameState):
         """
         locations = self.trash.list
         for p in self.players:
+            # TODO: unresolved reference
             locations += p.hand
 
         for idx in range(len(cards)):
@@ -368,9 +371,11 @@ class MCTSState(GameState):
             for c in locations:
                 if c.rank == card.rank and c.color == card.color:
                     quantity += 1
+                    # TODO: color not ok for index
             if self.board[card.color] >= card.rank:
                 quantity += 1
             if quantity > CARD_QUANTITIES[card.rank - 1]:
+                # TODO: idx not ok for index
                 cards[idx] = None
 
 

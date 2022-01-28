@@ -21,6 +21,7 @@ class Agent:
         new_card = None
         player = None
         for p in players:
+            # TODO: unresolved reference hands
             if len(p.hand) != len(self.hands[p.name]):
                 different_hands += 1
                 # NB: newly drawn cards are appended to the right

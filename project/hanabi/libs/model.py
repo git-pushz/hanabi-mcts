@@ -1,5 +1,10 @@
+import typing
+
 import numpy as np
 import copy
+
+from typing import List, Tuple
+
 from game_state import GameState, MCTSState
 
 NUM_COLUMNS = 7
@@ -59,7 +64,7 @@ class GameMove:
     def __init__(
         self,
         player: str,
-        action_type: str,
+        action_type: typing.Any,
         card_idx: int = None,
         destination: str = None,
         hint_type: str = None,
@@ -95,6 +100,7 @@ class Model:
         self.state = MCTSState(game_state)
         self._saved_hand = None
 
+    # TODO: REIMPLEMENT AS __copy__ or remove typing
     def copy(self) -> Model:
         model = Model(self.state)  # this already performs a deep-copy of state
         model._saved_hand = copy.deepcopy(self._saved_hand)  # TODO: check this
@@ -109,6 +115,7 @@ class Model:
         """
         if player != self.state.root_player_name:
             self._saved_hand = self.state.hands[player]
+            # TODO: missing redeterminize_hand
             self.state.redeterminize_hand(player)
 
     def exit_node(self, player: str) -> None:
@@ -122,7 +129,7 @@ class Model:
             self.state.restore_hand(player, self._saved_hand)
             self._saved_hand = None
 
-    def valid_moves(self, this_player: str) -> list[GameMove]:
+    def valid_moves(self, this_player: str) -> List[GameMove]:
         """
         Returns all possible moves available at the current state
         (that correspond to a certain tree level
@@ -199,7 +206,7 @@ class Model:
         self.make_move(np.random.choice(legal_moves))
         return True
 
-    def check_ended(self) -> tuple[bool, int]:
+    def check_ended(self) -> Tuple[bool, int]:
         """
         Returns True and the score of the game, if the game is ended. Returns False, None otherwise.
         """
