@@ -4,56 +4,6 @@ import numpy as np
 from .. import GameData
 
 
-def determinize_root(agent, players):
-    """
-    Determinize the root's hand and adjust all the other players'
-    mental states accordingly
-    """
-    redeterminize_hand(root_player)
-    for p in players:
-        player_ms = agent.knowledge.player_mental_state(p)  # maybe deepcopy?
-        for ms in player_ms.ms_hand:
-            for card in root_player.hand:
-                ms[card.value][card.color] -= 1
-
-
-def restore_root_hand(agent, players):  # only necessary if we don't make a deepcopy
-    """
-    Restore the root's hand as "unknown" and udjust all the other
-    players' mental states accordingly
-    """
-    for p in players:
-        player_ms = agent.knowledge.player_mental_state(p)
-        for ms in player_ms.ms_hand:
-            for card in root_player.hand:
-                ms[card.value][card.color] += 1
-    root_player.hand = []
-
-
-def enter_node(player, root_player_name):
-    saved_player_hand = None
-    if player.name != root_player_name:
-        saved_player_hand = copy.deepcopy(player.hand)
-        redeterminize_hand(player)
-    return saved_player_hand
-
-
-def exit_node(player, saved_player_hand):
-    if saved_player_hand is not None:
-        player.hand = saved_player_hand
-        remove_incompatible_cards(player.hand)
-        determinize_empty_slots
-
-
-def redeterminize_hand(player, player_ms):
-    pass
-
-
-##### OR #####
-
-# Keep a single "mental-state-like" table for the cards still in the deck
-# and apply masks "dinamically"
-
 colors = ["red", "yellow", "green", "blue", "white"]
 
 
@@ -110,11 +60,17 @@ class Deck:
         self._table = np.tile(col, len(colors))
 
     def _decrement(self, rank: int, color: Color) -> None:
-        assert (self._table[rank - 1][color] > 0, "trying to decrement zero value from Deck")
+        assert (
+            self._table[rank - 1][color] > 0,
+            "trying to decrement zero value from Deck",
+        )
         self._table[rank - 1][color] -= 1
 
     def _increment(self, rank: int, color: Color) -> None:
-        assert (self._table[rank - 1][color] < CARD_QUANTITIES[rank - 1], "trying to increment maximum value from Deck")
+        assert (
+            self._table[rank - 1][color] < CARD_QUANTITIES[rank - 1],
+            "trying to increment maximum value from Deck",
+        )
         self._table[rank - 1][color] += 1
 
     def remove_cards(self, cards: list[Card]) -> None:
@@ -147,7 +103,10 @@ class Trash:
         self._table = np.tile(col, len(colors))
 
     def _decrement(self, rank: int, color: Color) -> None:
-        assert (self._table[rank][color] > 0, "trying to decrement zero value from Deck")
+        assert (
+            self._table[rank][color] > 0,
+            "trying to decrement zero value from Deck",
+        )
         self._table[rank - 1][color] -= 1
         if self._table[rank - 1][color] == 0:
             self.maxima[color] = min(rank - 1, self.maxima[color])
@@ -156,7 +115,6 @@ class Trash:
         self.list.append(card)
         self._decrement(card.rank, card.color)
 
-        
 
 class GameState:
     """
@@ -192,7 +150,8 @@ class GameState:
             HAND_SIZE = 4
         self.root_player_name = root_player_name
         self.hands = {
-            player.name: GameState.generate_hand(player.hand) for player in data.players
+            player.name: GameState.server_to_client_hand(player.hand)
+            for player in data.players
         }
         self.hands[root_player_name] = []
         self.board = [0] * 5
@@ -203,8 +162,20 @@ class GameState:
         for hand in self.hands.values():
             deck.remove_cards(hand)
 
+    def __deepcopy__(self, memo={}):
+        cls = self.__class__
+        result = cls.__new__(cls)
+        result.players = copy.deepcopy(self.players)
+        result.root_player_name = copy.copy(self.root_player_name)
+        result.hands = copy.deepcopy(self.hands)
+        result.board = self.board[:]
+        result.trash = copy.deepcopy(self.trash)
+        result.hints = self.hints
+        result.errors = self.errors
+        return result
+
     @staticmethod
-    def generate_hand(server_hand: list) -> list[Card]:
+    def server_to_client_hand(server_hand: list) -> list[Card]:
         """
         Generate a client-hand (list of cards) given a server-hand
 
@@ -219,7 +190,21 @@ class GameState:
             hand.append(Card(rank=card.rank, color=card.color))
         return hand
 
+    def remove_card_from_hand(self, player: str, card_idx: int) -> None:
+        """
+        """
+        del self.hands[player][card_idx]
+
+    def append_card_to_player_hand(self, player: str, Card: card):
+        """
+        """
+        self.hands[player].append(card)
+        if player != self.name:
+            self.deck.draw(rank=card.rank, color=card.color)
+
     def give_hint(self, destination: str, hint_type: str, hint_value: int) -> None:
+        """
+        """
         hand = self.hands[destination]
         for card in hand:
             if hint_type == "rank" and card.rank == hint_value:
@@ -228,10 +213,71 @@ class GameState:
                 card.reveal_color()
         self.hints += 1
 
+    def update_trash(self, card: Card) -> None:
+        """
+        """
+        self.trash.append(card)
+
+    def gain_hint(self) -> None:
+        """
+        """
+        if self.hints == 0:
+            raise RuntimeError(f"Trying to gain more than {MAX_HINTS} hint tokens.")
+        self.hints -= 1
+
+    def use_hint(self) -> None:
+        """
+        """
+        if self.hints == MAX_HINTS:
+            raise RuntimeError("Trying to use more token hints than allowed")
+        self.hints += 1
+
+    def mistake_made(self) -> None:
+        """
+        """
+        if self.errors >= MAX_ERROR:
+            raise RuntimeError("Too many error tokens")
+        self.errors += 1
+
+    def card_correctly_played(self, color: Color) -> None:
+        """
+        """
+        if self.board[color] >= self.trash.maxima[color]:
+            raise RuntimeError("Trying to play a card that doesn't exists")
+        self.board[color] += 1
+        self.hints = max(0, self.hints - 1)  # gain an hint if possible
+
+    def game_ended(self) -> tuple[bool, int]:
+        """
+        Checks if the game is ended for some reason. If it's ended, it returns True and the score of the game.
+        If the game isn't ended, it returns False, None
+        """
+        if self.errors == MAX_ERRORS:
+            return True, 0
+        if self.board == self.trash.maxima:
+            return True, sum(self.board)
+        if self.deck.is_empty():
+            return True, sum(self.board)
+        return False, None
+
+
+class MCTSState(GameState):
+    """ """
+
+    def __init__(initial_state: Gamestate) -> None:
+        self.players = copy.deepcopy(sinitial_stateelf.players)
+        self.root_player_name = copy.copy(initial_state.root_player_name)
+        self.hands = copy.deepcopy(initial_state.hands)
+        self.board = initial_state.board[:]
+        self.trash = copy.deepcopy(initial_state.trash)
+        self.hints = initial_state.hints
+        self.errors = initial_state.errors
+
+    # MCTS
     def play_card(self, player: str, card_idx: int) -> None:
         card = self.hands[player].pop(card_idx)
         self.hands[player].append(self.deck.draw())
-        if (player == self.root_player_name and not card.is_fully_determined()):
+        if player == self.root_player_name and not card.is_fully_determined():
             self.deck.remove_cards([card])
         if self.board[card.color] == card.rank - 1:
             self.board[card.color] += 1
@@ -240,28 +286,34 @@ class GameState:
         else:
             self.trash.append(card)
             self.errors += 1
-    
+
     def discard_card(self, player: str, card_idx: int) -> None:
         card = self.hands[player].pop(card_idx)
         self.hands[player].append(self.deck.draw())
-        if (player == self.root_player_name and not card.is_fully_determined()):
+        if player == self.root_player_name and not card.is_fully_determined():
             self.deck.remove_cards([card])
         self.trash.append(card)
         self.hints = max(self.hints - 1, 0)
 
-    def game_ended(self) -> tuple[bool, int]:
-        """
-        Checks if the game is ended for some reason. If it's ended, it returns True and the score of the game.
-        If the game isn't ended, it returns False, None
-        """
-        if self.errors == MAX_ERRORS: 
-           return True, 0
-        if self.board == self.trash.maxima:
-            return True, sum(self.board)
-        if self.deck.is_empty():
-            return True, sum(self.board)
-        return False, None
+    # MCTS
+    def hints_available(self) -> int:
+        return MAX_HINTS - self.hints
 
+    # MCTS
+    def get_prev_player_name(self, current_player: str) -> str:
+        current_player_idx = self.player.index(current_player)
+        prev_player_idx = current_player_idx - 1
+        if prev_player_idx < 0:
+            prev_player_idx = len(self.players) - 1
+        return players[prev_player_idx]
+
+    # MCTS
+    def get_next_player_name(self, current_player: str) -> str:
+        current_player_idx = self.player.index(current_player)
+        next_player_idx = (current_player_idx + 1) % len(self.players)
+        return players[next_player_idx]
+
+    # MCTS
     def restore_hand(self, player_name: str, saved_hand: list[Card]) -> None:
         """
         Restore the specified hand for the specified player, removing all the "illegal" cards
@@ -277,6 +329,7 @@ class GameState:
         self._determinize_empty_slots(saved_hand)
         self.hands[player_name] = saved_hand
 
+    # MCTS
     def _determinize_empty_slots(self, hand: list[Card]) -> None:
         """
         Determinize the empty slots of the hand (where card = None)
@@ -288,6 +341,7 @@ class GameState:
             if hand[idx] is None:
                 hand[idx] = deck.draw()
 
+    # MCTS
     def _remove_illegal_cards(self, cards: list[Card]) -> None:
         """
         Remove the illegal cards from the list (considering all the cards in the trash,

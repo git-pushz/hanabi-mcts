@@ -15,12 +15,12 @@ def find(pred, iterable):
 
 
 class GameNode:
-    def __init__(self, move: GameMove):
+    def __init__(self, move: GameMove) -> None:
         self.move = move
         self.value = 0
         self.simulations = 0
 
-    def copy(self):
+    def copy(self) -> GameNode:
         new_game_node = GameNode(None if self.move == None else self.move.copy())
         new_game_node.value = self.value
         new_game_node.simulations = self.simulations
@@ -28,28 +28,12 @@ class GameNode:
 
 
 class MCTS:
-    # players is the list of players in turn order (Player: name, ready, hand (list of cards in hand order))
-    # def __init__(self, model, player=PLAYER1):
-    def __init__(self, model: Model, players, current_player: int):
-        # model contains all the game specific logic
+    def __init__(self, model: Model, current_player: str):
         self.model = model
-        # the root contain the move of the player that played just before the agent (the move itself is not important
-        # and it's set to None)
-        # the nodes at the first level of the tree will contain the moves of the agent
-
-        ## removed
-        # root = Node(GameNode(GameMove(player*-1, None)))
-        ##
-        ## added
-        # if current_player == 0:
-        #     player_before_agent_index = len(players) - 1
-        # else:
-        #     player_before_agent_index = current_player - 1
-        ##
-        if current_player == 0:
-            current_player = len(players)
-        prev_player = current_player - 1
-        root = Node(GameNode(GameMove(prev_player, None, None, None)))
+        prev_player = model.state.get_prev_player_name(current_player)
+        root = Node(
+            GameNode(GameMove(prev_player, action_type=None))
+        )  # dummy game-move
         self.tree = Tree(root)
 
     def run_search(self, iterations=50):
@@ -65,18 +49,10 @@ class MCTS:
         return best_move_node.data.move.position
 
     def run_search_iteration(self):
-        select_res = self.select(self.model.copy())
-        select_leaf = select_res[0]
-        select_model = select_res[1]
+        select_leaf, select_model = self.select(self.model.copy())
 
         # print('selected node ', select_leaf)
-        expand_res = self.expand(select_leaf, select_model)
-        expand_leaf = expand_res[0]
-        expand_model = expand_res[1]
-
-        ## removed
-        # simulation_winner = self.simulate(expand_leaf, expand_model)
-        # self.backpropagate(expand_leaf, simulation_winner)
+        expand_leaf, expand_model = self.expand(select_leaf, select_model)
 
         ## added
         simulation_score = self.simulate(expand_leaf, expand_model)
@@ -104,10 +80,11 @@ class MCTS:
     def select(self, model: Model):
         node = self.tree.get_root()
         while not node.is_leaf() and self.is_fully_explored(node, model):
-            model.exit_node(node.data.move.player)
+            player = model.state.get_next_player_name(node.data.move.player)
+            model.exit_node(player)  # re-determinize hand
             node = self.get_best_child_UCB1(node)
             model.make_move(node.data.move)
-            model.enter_node(node.data.move.player)  # can be put inside make_move() ?
+            model.enter_node(player)  # restore hand
         return node, model
 
     def is_fully_explored(self, node: Node, model: Model):
@@ -119,13 +96,12 @@ class MCTS:
 
     def get_available_plays(self, node: Node, model):
         children = self.tree.get_children(node)
+        player = model.state.get_next_player_name(node.data.move.player)
         # return only valid moves which haven't been already tried in children
         return list(
             filter(
-                lambda col: not find(
-                    lambda child: child.data.move.position == col, children
-                ),
-                model.valid_moves(),
+                lambda move: not find(lambda child: child.data.move == move, children),
+                model.valid_moves(player),
             )
         )
 
@@ -133,22 +109,10 @@ class MCTS:
         expanded_node = None
 
         # model.check_win should check if the match is over, not if it is won (see simulation and backpropagation function)
-        if not model.check_win():
-            legal_positions = self.get_available_plays(node, model)
-            random_pos = np.random.choice(legal_positions)
-            ## removed
-            # other_player = node.data.move.player*-1
-            ##
-            ## added
-            # if node.data.move.player == len(model.agent.players):
-            #     next_player = 0
-            # else:
-            #     next_player = node.data.move.player + 1
-            ##
-            next_player = (node.data.move.player + 1) % len(model.state.players)
-            random_move = GameMove(next_player, random_pos)
+        if not model.check_ended()[0]:
+            legal_moves = self.get_available_plays(node, model)
+            random_move = np.random.choice(legal_moves)
             model.make_move(random_move)
-
             expanded_node = Node(GameNode(random_move))
             self.tree.insert(expanded_node, node)
         else:
@@ -167,23 +131,14 @@ class MCTS:
         # so this function need some changes (at the end it needs to return the score)
 
         # only one simulation has been run, probably it is better to run a bunch of simulations
-        while not model.check_win():
-            ## removed
-            # current_player = current_player*-1
-            ##
-            ## added
-            if node.data.move.player == len(model.agent.players):
-                current_player = 0
-            else:
-                current_player = node.data.move.player + 1
-            # current_player = (node.data.move.player + 1) % len(model.agent.players)
-            ##
+        while not model.check_ended()[0]:
+            current_player = model.state.get_next_player_name(current_player)
             # if there are no more legal moves (=> draw)
             if not model.make_random_move(current_player):
                 break
-        winner = model.check_win()
+        score = model.check_ended()[1]
 
-        return winner
+        return score
 
     # def backpropagate(self, node, winner: int):
     def backpropagate(self, node: Node, score: int):
@@ -193,33 +148,23 @@ class MCTS:
         # just to give and idea I implemented a simple version
         while not node.is_root():
             node.data.simulations += 1
-            ## removed
-            # if ((node.data.move.player == 1 and winner == 1) or (node.data.move.player == -1 and winner == -1)):
-            #     node.data.value += 1
-            # if ((node.data.move.player == 1 and winner == -1) or (node.data.move.player == -1 and winner == 1)):
-            #     node.data.value -= 1
-            ##
-            # the problem is that in hanabi there is no winner
-
-            ## added
-            # it maps the score to [-1, 1]
-            node.data.value += ((score / 99.0) * 2) - 1
-            ##
+            # it maps the score to [0, 1]
+            node.data.value += score / 25
             node = self.tree.get_parent(node)
             # print('parent node ', node)
             # print('is ', node.data.move.position, ' root? ', node.is_root())
         node.data.simulations += 1
         return
 
-    def UCB1(self, node: Node, parent: Node):
+    def UCB1(self, node: Node, parent: Node, c: float = 0.1):
         exploitation = node.data.value / node.data.simulations
         if parent.data.simulations == 0:
             exploration = 0
         else:
             exploration = np.sqrt(
-                2 * np.log(parent.data.simulations) / node.data.simulations
+                np.log(parent.data.simulations) / node.data.simulations
             )
-        return exploitation + exploration
+        return exploitation + c * exploration
 
     def get_best_child_UCB1(self, node: Node):
         node_scores = map(

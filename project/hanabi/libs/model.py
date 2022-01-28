@@ -1,6 +1,6 @@
 import numpy as np
 import copy
-from game_state import GameState
+from game_state import GameState, MCTSState
 
 NUM_COLUMNS = 7
 COLUMN_HEIGHT = 6
@@ -72,10 +72,26 @@ class GameMove:
         self.hint_type = hint_type
         self.hint_value = hint_value
 
+    def __eq__(self, other):
+        equal = self.player == other.player and self.action_type == other.action_type
+        if action_type == "hint":
+            equal = (
+                equal
+                and self.destination == other.destination
+                and self.hint_type == other.hint_type
+                and self.hint_value == other.hint_value
+            )
+        else:
+            equal = equal and self.card_idx == other.card_idx
+        return equal
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
 
 class Model:
     def __init__(self, game_state: GameState) -> None:
-        self.state = copy.deepcopy(game_state)
+        self.state = MCTSState(game_state)
         self._saved_hand = None
 
     def copy(self) -> Model:
@@ -121,40 +137,41 @@ class Model:
             for action_type in ["play", "discard"]:
                 moves.append(GameMove(this_player, action_type, card_idx=idx))
 
-        action_type = "hint"
-        for player in self.state.players:
-            if player == this_player:
-                continue
-            hand = self.state.hands[player]
-            for rank in range(5):
-                if any(card.rank == rank for card in hand):
-                    move.append(
-                        GameMove(
-                            this_player,
-                            action_type,
-                            destination=player,
-                            hint_type="rank",
-                            hint_value=rank,
+        if self.state.hints_available() > 0:
+            action_type = "hint"
+            for player in self.state.players:
+                if player == this_player:
+                    continue
+                hand = self.state.hands[player]
+                for rank in range(1, 6):
+                    if any(card.rank == rank for card in hand):
+                        moves.append(
+                            GameMove(
+                                this_player,
+                                action_type,
+                                destination=player,
+                                hint_type="rank",
+                                hint_value=rank,
+                            )
                         )
-                    )
-            for color in range(5):
-                if any(card.color == color for card in hand):
-                    move.append(
-                        GameMove(
-                            this_player,
-                            action_type,
-                            destination=player,
-                            hint_type="color",
-                            hint_value=color,
+                for color in range(5):
+                    if any(card.color == color for card in hand):
+                        moves.append(
+                            GameMove(
+                                this_player,
+                                action_type,
+                                destination=player,
+                                hint_type="color",
+                                hint_value=color,
+                            )
                         )
-                    )
 
         return moves
 
     def make_move(self, move: GameMove) -> None:
         """
         Makes a move and updates the game state accordingly
-        
+
         Args:
             move: the move to perform
         """
