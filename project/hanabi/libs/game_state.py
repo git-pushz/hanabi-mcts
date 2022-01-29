@@ -1,6 +1,10 @@
 import copy
 import typing
+from enum import Enum
+
 import numpy as np
+from typing import List, Tuple
+
 from .. import GameData
 
 
@@ -16,11 +20,11 @@ class Color(Enum):
 
 
 color2enum = {
-    "red": RED,
-    "yellow": YELLOW,
-    "green": GREEN,
-    "blue": BLUE,
-    "white": WHITE,
+    "red": Color.RED,
+    "yellow": Color.YELLOW,
+    "green": Color.GREEN,
+    "blue": Color.BLUE,
+    "white": Color.WHITE,
 }
 
 HAND_SIZE = 5
@@ -73,11 +77,11 @@ class Deck:
         )
         self._table[rank - 1][color] += 1
 
-    def remove_cards(self, cards: list[Card]) -> None:
+    def remove_cards(self, cards: List[Card]) -> None:
         for card in cards:
             self._decrement(card.rank, card.color)
 
-    def add_cards(self, cards: list[Card]) -> None:
+    def add_cards(self, cards: List[Card]) -> None:
         for card in cards:
             self._increment(card.rank, card.color)
 
@@ -109,6 +113,7 @@ class Trash:
         )
         self._table[rank - 1][color] -= 1
         if self._table[rank - 1][color] == 0:
+            # TODO: color not ok for index
             self.maxima[color] = min(rank - 1, self.maxima[color])
 
     def append(self, card: Card) -> None:
@@ -132,7 +137,7 @@ class GameState:
 
     def __init__(
         self,
-        player_names: list[str],
+        players_names: List[str],
         root_player_name: str,
         data: GameData.ServerGameStateData,
     ) -> None:
@@ -140,12 +145,12 @@ class GameState:
         Create a new GameState
 
         Args:
-            player_names: the list of the player names in turn order
+            players_names: the list of the player names in turn order
             root_player_name: the name of the root player (agent)
             data: the server game state to use to initialize the client game state
         """
         global HAND_SIZE
-        self.players = copy.deepcopy(player_names)
+        self.players = copy.deepcopy(players_names)
         if len(players_names) >= 4:
             HAND_SIZE = 4
         self.root_player_name = root_player_name
@@ -160,7 +165,7 @@ class GameState:
         self.errors = data.usedStormTokens
         self.deck = Deck()
         for hand in self.hands.values():
-            deck.remove_cards(hand)
+            self.deck.remove_cards(hand)
 
     def __deepcopy__(self, memo={}):
         cls = self.__class__
@@ -175,7 +180,7 @@ class GameState:
         return result
 
     @staticmethod
-    def server_to_client_hand(server_hand: list) -> list[Card]:
+    def server_to_client_hand(server_hand: list) -> List[Card]:
         """
         Generate a client-hand (list of cards) given a server-hand
 
@@ -195,11 +200,11 @@ class GameState:
         """
         del self.hands[player][card_idx]
 
-    def append_card_to_player_hand(self, player: str, Card: card):
+    def append_card_to_player_hand(self, player: str, card: Card):
         """
         """
         self.hands[player].append(card)
-        if player != self.name:
+        if player != self.root_player_name:
             self.deck.draw(rank=card.rank, color=card.color)
 
     def give_hint(self, destination: str, hint_type: str, hint_value: int) -> None:
@@ -235,19 +240,20 @@ class GameState:
     def mistake_made(self) -> None:
         """
         """
-        if self.errors >= MAX_ERROR:
+        if self.errors >= MAX_ERRORS:
             raise RuntimeError("Too many error tokens")
         self.errors += 1
 
     def card_correctly_played(self, color: Color) -> None:
         """
         """
+        # TODO: color not ok for index
         if self.board[color] >= self.trash.maxima[color]:
             raise RuntimeError("Trying to play a card that doesn't exists")
         self.board[color] += 1
         self.hints = max(0, self.hints - 1)  # gain an hint if possible
 
-    def game_ended(self) -> tuple[bool, int]:
+    def game_ended(self) -> Tuple[bool, typing.Any]:
         """
         Checks if the game is ended for some reason. If it's ended, it returns True and the score of the game.
         If the game isn't ended, it returns False, None
@@ -264,8 +270,10 @@ class GameState:
 class MCTSState(GameState):
     """ """
 
-    def __init__(initial_state: Gamestate) -> None:
-        self.players = copy.deepcopy(sinitial_stateelf.players)
+    def __init__(self, initial_state: GameState, player_names: List[str], root_player_name: str,
+                 data: GameData.ServerGameStateData) -> None:
+        super().__init__(player_names, root_player_name, data)
+        self.players = copy.deepcopy(initial_state.players)
         self.root_player_name = copy.copy(initial_state.root_player_name)
         self.hands = copy.deepcopy(initial_state.hands)
         self.board = initial_state.board[:]
@@ -301,20 +309,20 @@ class MCTSState(GameState):
 
     # MCTS
     def get_prev_player_name(self, current_player: str) -> str:
-        current_player_idx = self.player.index(current_player)
+        current_player_idx = self.players.index(current_player)
         prev_player_idx = current_player_idx - 1
         if prev_player_idx < 0:
             prev_player_idx = len(self.players) - 1
-        return players[prev_player_idx]
+        return self.players[prev_player_idx]
 
     # MCTS
     def get_next_player_name(self, current_player: str) -> str:
-        current_player_idx = self.player.index(current_player)
+        current_player_idx = self.players.index(current_player)
         next_player_idx = (current_player_idx + 1) % len(self.players)
-        return players[next_player_idx]
+        return self.players[next_player_idx]
 
     # MCTS
-    def restore_hand(self, player_name: str, saved_hand: list[Card]) -> None:
+    def restore_hand(self, player_name: str, saved_hand: List[Card]) -> None:
         """
         Restore the specified hand for the specified player, removing all the "illegal" cards
         and re-determinizing their slots
@@ -330,7 +338,7 @@ class MCTSState(GameState):
         self.hands[player_name] = saved_hand
 
     # MCTS
-    def _determinize_empty_slots(self, hand: list[Card]) -> None:
+    def _determinize_empty_slots(self, hand: List[Card]) -> None:
         """
         Determinize the empty slots of the hand (where card = None)
 
@@ -339,10 +347,10 @@ class MCTSState(GameState):
         """
         for idx in range(len(hand)):
             if hand[idx] is None:
-                hand[idx] = deck.draw()
+                hand[idx] = self.deck.draw()
 
     # MCTS
-    def _remove_illegal_cards(self, cards: list[Card]) -> None:
+    def _remove_illegal_cards(self, cards: List[Card]) -> None:
         """
         Remove the illegal cards from the list (considering all the cards in the trash,
         in the player's hands and on the table)
@@ -351,7 +359,8 @@ class MCTSState(GameState):
             cards: the list of cards to modify
         """
         locations = self.trash.list
-        for p in players:
+        for p in self.players:
+            # TODO: unresolved reference
             locations += p.hand
 
         for idx in range(len(cards)):
@@ -362,9 +371,11 @@ class MCTSState(GameState):
             for c in locations:
                 if c.rank == card.rank and c.color == card.color:
                     quantity += 1
-            if board[card.color] >= card.rank:
+                    # TODO: color not ok for index
+            if self.board[card.color] >= card.rank:
                 quantity += 1
             if quantity > CARD_QUANTITIES[card.rank - 1]:
+                # TODO: idx not ok for index
                 cards[idx] = None
 
 

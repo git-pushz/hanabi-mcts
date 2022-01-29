@@ -1,5 +1,4 @@
-from math import fabs
-from libs.model import PLAYER1, PLAYER2, Model, GameMove
+from model import Model, GameMove
 from .tree import Tree, Node
 from functools import reduce
 import numpy as np
@@ -20,6 +19,7 @@ class GameNode:
         self.value = 0
         self.simulations = 0
 
+    # TODO: REIMPLEMENT AS __copy__ or remove typing
     def copy(self) -> GameNode:
         new_game_node = GameNode(None if self.move == None else self.move.copy())
         new_game_node.value = self.value
@@ -46,6 +46,7 @@ class MCTS:
             lambda a, b: a if a.data.simulations > b.data.simulations else b,
             self.tree.get_children(self.tree.get_root()),
         )
+        # TODO: unresolved reference position
         return best_move_node.data.move.position
 
     def run_search_iteration(self):
@@ -69,6 +70,7 @@ class MCTS:
                 print("simulations ", child.data.simulations)
                 print("value ", child.data.value)
                 print("UCB1 ", self.UCB1(child, self.tree.get_root()))
+                # TODO: unresolved reference position
                 print("position", child.data.move.position)
                 print("player", child.data.move.player)
                 print(

@@ -3,7 +3,7 @@ import sys
 from sys import argv, stdout
 from threading import Thread
 from threading import Condition
-import GameData
+from .. import GameData
 import socket
 from constants import *
 # from agent import Agent, DEBUG, VERBOSE, LOG
