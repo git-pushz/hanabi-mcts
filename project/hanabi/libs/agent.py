@@ -58,10 +58,10 @@ class Agent:
         """
         self._game_state.mistake_made()
 
-    def discover_card(self, card: Card, card_idx: int, action_type: str) -> None:
+    def discover_card(self, card: Card, card_idx: int, action_type: str = None) -> None:
         """
-        Called whenever the agent plays or discards a card, this function update the deck knowledge if the discovered card is NOT fully determined. 
-       
+        Called whenever the agent plays or discards a card, this function update the deck knowledge if the discovered card is NOT fully determined.
+
         Args:
             card: the played/discarded card
             card_index: the index of card in agent's hand
@@ -73,7 +73,7 @@ class Agent:
             card.reveal_color()
             card.reveal_rank()
             self._game_state.deck.remove_cards([card]) #update deck
-        
+
         # - if passed card is fully determined:
         #   the deck already "know" that card -> do nothing
 
@@ -90,4 +90,7 @@ class Agent:
     def update_knowledge_on_hint(self, hint_type: str, hint_value: int, cards_idx: List[int], destination: str) -> None:
         """
         """
-        pass
+        if destination == self.name:
+            pass
+        else:
+            pass

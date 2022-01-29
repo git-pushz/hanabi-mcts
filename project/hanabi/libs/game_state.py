@@ -63,6 +63,12 @@ class Deck:
         col = col.reshape(col.size, 1)
         self._table = np.tile(col, len(colors))
 
+    def __len__(self):
+        """
+        Return the number of cards still available in the deck
+        """
+        return np.sum(self._table)
+
     def _decrement(self, rank: int, color: Color) -> None:
         assert (
             self._table[rank - 1][color] > 0,
@@ -123,12 +129,11 @@ class Trash:
 
 class GameState:
     """
-    Atttributes:
+    Attributes:
         players:            list of player names in turn order
         root_player_name:   name of the root player (agent)
         hands:              dictionary with player names as keys and hands (list of cards) as values
-        boards:             successfully played cards (currently in the table)
-        maximums:           the maximum values that can be reached by each firework
+        board:             successfully played cards (currently in the table)
         trash:              list of discarded cards
         hints:              the number of used note tokens
         errors:             the number of used storm tokens
