@@ -1,6 +1,6 @@
 import copy
 import typing
-from enum import Enum
+from enum import IntEnum
 
 import numpy as np
 from typing import List, Tuple
@@ -11,7 +11,7 @@ from .. import GameData
 colors = ["red", "yellow", "green", "blue", "white"]
 
 
-class Color(Enum):
+class Color(IntEnum):
     RED = 0
     YELLOW = 1
     GREEN = 2
@@ -69,6 +69,12 @@ class Deck:
         """
         return np.sum(self._table)
 
+    def __getitem__(self, item):
+        if type(item) is tuple:
+            return self._table[item[0], item[1]]
+        else:
+            pass
+
     def _decrement(self, rank: int, color: Color) -> None:
         assert (
             self._table[rank - 1][color] > 0,
@@ -119,7 +125,6 @@ class Trash:
         )
         self._table[rank - 1][color] -= 1
         if self._table[rank - 1][color] == 0:
-            # TODO: color not ok for index
             self.maxima[color] = min(rank - 1, self.maxima[color])
 
     def append(self, card: Card) -> None:
@@ -144,7 +149,7 @@ class GameState:
         self,
         players_names: List[str],
         root_player_name: str,
-        data: GameData.ServerGameStateData,
+        data: GameData.ServerGameStateData = None,
     ) -> None:
         """
         Create a new GameState
@@ -159,15 +164,19 @@ class GameState:
         if len(players_names) >= 4:
             HAND_SIZE = 4
         self.root_player_name = root_player_name
-        self.hands = {
-            player.name: GameState.server_to_client_hand(player.hand)
-            for player in data.players
-        }
-        self.hands[root_player_name] = []
+        if data is not None:
+            self.hands = {
+                player.name: GameState.server_to_client_hand(player.hand)
+                for player in data.players
+            }
+            self.hands[root_player_name] = []
+            self.hints = data.usedNoteTokens
+            self.errors = data.usedStormTokens
+        else:
+            self.hands = {}
+
         self.board = [0] * 5
         self.trash = Trash()
-        self.hints = data.usedNoteTokens
-        self.errors = data.usedStormTokens
         self.deck = Deck()
         for hand in self.hands.values():
             self.deck.remove_cards(hand)
@@ -252,7 +261,6 @@ class GameState:
     def card_correctly_played(self, color: Color) -> None:
         """
         """
-        # TODO: color not ok for index
         if self.board[color] >= self.trash.maxima[color]:
             raise RuntimeError("Trying to play a card that doesn't exists")
         self.board[color] += 1
@@ -273,13 +281,12 @@ class GameState:
 
 
 class MCTSState(GameState):
-    """ """
+    """
 
-    def __init__(self, initial_state: GameState, player_names: List[str], root_player_name: str,
-                 data: GameData.ServerGameStateData) -> None:
-        super().__init__(player_names, root_player_name, data)
-        self.players = copy.deepcopy(initial_state.players)
-        self.root_player_name = copy.copy(initial_state.root_player_name)
+    """
+
+    def __init__(self, initial_state: GameState) -> None:
+        super().__init__(copy.deepcopy(initial_state.players), copy.copy(initial_state.root_player_name))
         self.hands = copy.deepcopy(initial_state.hands)
         self.board = initial_state.board[:]
         self.trash = copy.deepcopy(initial_state.trash)
@@ -365,24 +372,24 @@ class MCTSState(GameState):
         """
         locations = self.trash.list
         for p in self.players:
-            # TODO: unresolved reference
-            locations += p.hand
+            locations += self.hands[p]
 
         for idx in range(len(cards)):
             card = cards[idx]
             if card is None:
                 continue
-            quantity = 1 + self.deck[card.rank][card.color]  # 1 is for "card" itself
+            quantity = 1 + self.deck[card.rank, card.color]  # 1 is for "card" itself
             for c in locations:
                 if c.rank == card.rank and c.color == card.color:
                     quantity += 1
-                    # TODO: color not ok for index
             if self.board[card.color] >= card.rank:
                 quantity += 1
             if quantity > CARD_QUANTITIES[card.rank - 1]:
                 # TODO: idx not ok for index
                 cards[idx] = None
 
+    def redeterminize_hand(self, player):
+        pass
 
 ### TODO
 # * Gestire ultimo giro di giocate dopo che il mazzo e' finito

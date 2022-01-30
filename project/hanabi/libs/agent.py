@@ -21,8 +21,7 @@ class Agent:
         new_card = None
         player = None
         for p in players:
-            # TODO: unresolved reference hands
-            if len(p.hand) != len(self.hands[p.name]):
+            if len(p.hand) != len(self._game_state.hands[p.name]):
                 different_hands += 1
                 # NB: newly drawn cards are appended to the right
                 new_card = p.hand[-1]
@@ -64,15 +63,15 @@ class Agent:
 
         Args:
             card: the played/discarded card
-            card_index: the index of card in agent's hand
+            card_idx: the index of card in agent's hand
             action_type: it's one of ['play', 'mistake', 'discard'] FOR DEBUG ONLY
         """
         # - if passed card is NOT fully determined:
         #   the deck now knows that this card is in game -> update deck knowledge:
-        if (not card.is_fully_determined):
+        if not card.is_fully_determined:
             card.reveal_color()
             card.reveal_rank()
-            self._game_state.deck.remove_cards([card]) #update deck
+            self._game_state.deck.remove_cards([card])  # update deck
 
         # - if passed card is fully determined:
         #   the deck already "know" that card -> do nothing

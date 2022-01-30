@@ -94,17 +94,29 @@ class GameMove:
     def __ne__(self, other):
         return not self.__eq__(other)
 
+    def __copy__(self):
+        cls = self.__class__
+        result = cls.__new__(cls)
+        result.player = self.player
+        result.action_type = self.action_type
+        result.card_idx = self.card_idx
+        result.destination = self.destination
+        result.hint_type = self.hint_type
+        result.hint_value = self.hint_value
+        return result
+
 
 class Model:
     def __init__(self, game_state: GameState) -> None:
         self.state = MCTSState(game_state)
         self._saved_hand = None
 
-    # TODO: REIMPLEMENT AS __copy__ or remove typing
-    def copy(self) -> Model:
-        model = Model(self.state)  # this already performs a deep-copy of state
-        model._saved_hand = copy.deepcopy(self._saved_hand)  # TODO: check this
-        return model
+    def __copy__(self):
+        cls = self.__class__
+        result = cls.__new__(cls)
+        result.state = copy.deepcopy(self.state)
+        result._saved_hand = copy.deepcopy(self._saved_hand)
+        return result
 
     def enter_node(self, player: str) -> None:
         """
@@ -115,7 +127,6 @@ class Model:
         """
         if player != self.state.root_player_name:
             self._saved_hand = self.state.hands[player]
-            # TODO: missing redeterminize_hand
             self.state.redeterminize_hand(player)
 
     def exit_node(self, player: str) -> None:
