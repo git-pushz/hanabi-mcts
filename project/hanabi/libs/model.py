@@ -1,10 +1,5 @@
-import typing
-
 import numpy as np
 import copy
-
-from typing import List, Tuple
-
 from game_state import GameState, MCTSState
 from constants import SEED
 
@@ -65,7 +60,7 @@ class GameMove:
     def __init__(
         self,
         player: str,
-        action_type: typing.Any,
+        action_type: str,
         card_idx: int = None,
         destination: str = None,
         hint_type: str = None,
@@ -109,11 +104,11 @@ class GameMove:
 
 class Model:
     def __init__(self, game_state: GameState) -> None:
-        np.random.seed(SEED)
+        # np.random.seed(SEED)
         self.state = MCTSState(game_state)
         self._saved_hand = None
 
-    def __copy__(self):
+    def __deepcopy__(self, memo={}):
         cls = self.__class__
         result = cls.__new__(cls)
         result.state = copy.deepcopy(self.state)
@@ -139,11 +134,11 @@ class Model:
         Args:
             player: the name of the player
         """
-        if self._saved_hand is not None:
+        if player != self.state.root_player_name and self._saved_hand is not None:
             self.state.restore_hand(player, self._saved_hand)
             self._saved_hand = None
 
-    def valid_moves(self, this_player: str) -> List[GameMove]:
+    def valid_moves(self, this_player: str) -> list[GameMove]:
         """
         Returns all possible moves available at the current state
         (that correspond to a certain tree level
@@ -202,7 +197,6 @@ class Model:
         elif move.action_type == "discard":
             self.state.discard_card(move.player, move.card_idx)
         elif move.action_type == "hint":
-            # TODO: THIS GIVE_HINT FUNCTION WANTS A LIST OF INDICES
             self.state.give_hint(move.destination, move.hint_type, move.hint_value)
         else:
             raise RuntimeError(f"Unknown action type: {move.action_type}")
@@ -218,10 +212,11 @@ class Model:
         legal_moves = self.valid_moves(player)
         if len(legal_moves) == 0:
             return False
-        self.make_move(np.random.choice(legal_moves))
+        random_move = np.random.choice(legal_moves)
+        self.make_move(random_move)
         return True
 
-    def check_ended(self) -> Tuple[bool, int]:
+    def check_ended(self) -> tuple[bool, int]:
         """
         Returns True and the score of the game, if the game is ended. Returns False, None otherwise.
         """

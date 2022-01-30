@@ -1,4 +1,3 @@
-from typing import List
 from game_state import GameState, Card, color_enum2str, color_str2enum
 from model import Model
 from mcts import MCTS
@@ -7,6 +6,7 @@ import GameData
 DEBUG = False
 VERBOSE = True
 LOG = False
+
 
 class Agent:
     def __init__(self, name: str, data: GameData.ServerGameStateData, players_names: list):
@@ -17,9 +17,9 @@ class Agent:
         """
         """
         mcts = MCTS(Model(self._game_state), self.name)
-        move = mcts.run_search()
+        move = mcts.run_search(1)
         if move.action_type == "hint":
-            hint_value = move.hint_value if move.hint_type == "value" else color_enum2str(move.hint_value)
+            hint_value = move.hint_value if move.hint_type == "value" else color_enum2str[move.hint_value]
             return GameData.ClientHintData(self.name, move.destination, move.hint_type, hint_value)
         elif move.action_type == "play":
             return GameData.ClientPlayerPlayCardRequest(self.name, move.card_idx)
@@ -71,7 +71,7 @@ class Agent:
         """
         self._game_state.mistake_made()
 
-    def discover_card(self, card: Card, card_idx: int, action_type: str = None) -> None:
+    def discover_card(self, card, card_idx: int, action_type: str = None) -> None:
         """
         Called whenever the agent plays or discards a card, this function update the deck knowledge if the discovered card is NOT fully determined.
 
@@ -80,15 +80,7 @@ class Agent:
             card_idx: the index of card in agent's hand
             action_type: it's one of ['play', 'mistake', 'discard'] FOR DEBUG ONLY
         """
-        # - if passed card is NOT fully determined:
-        #   the deck now knows that this card is in game -> update deck knowledge:
-        if not card.is_fully_determined():
-            card.reveal_color()
-            card.reveal_rank()
-            self._game_state.deck.remove_cards([card])  # update deck
-
-        # - if passed card is fully determined:
-        #   the deck already "know" that card -> do nothing
+        self._game_state.discover_card(card.value, color_str2enum[card.color], card_idx)
 
     def update_board(self, card) -> None:
         """
@@ -113,9 +105,8 @@ class Agent:
         for player in players:
             assert player.hand == self._game_state.hands[player.name], f"player {player.name} wrong hand"
 
-    def update_knowledge_on_hint(self, hint_type: str, hint_value: int, cards_idx: List[int], destination: str) -> None:
+    def update_knowledge_on_hint(self, hint_type: str, hint_value: int, cards_idx: list[int], destination: str) -> None:
         """
         """
-        value = hint_value if hint_type == "value" else color_str2enum(hint_value)
+        value = hint_value if hint_type == "value" else color_str2enum[hint_value]
         self._game_state.give_hint(cards_idx, destination, hint_type, value)
-

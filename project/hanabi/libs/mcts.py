@@ -1,5 +1,4 @@
 import copy
-
 from model import Model, GameMove
 from constants import SEED
 from tree import Tree, Node, GameNode
@@ -17,8 +16,8 @@ def find(pred, iterable):
 
 
 class MCTS:
-    def __init__(self, model: Model, current_player: str):
-        np.random.seed(SEED)
+    def __init__(self, model: Model, current_player: str) -> None:
+        # np.random.seed(SEED)
         self.model = model
         prev_player = model.state.get_prev_player_name(current_player)
         root = Node(
@@ -29,7 +28,7 @@ class MCTS:
     def run_search(self, iterations=50) -> GameMove:
         # each iteration represents the select, expand, simulate, backpropagate iteration
         for _ in range(iterations):
-            self.run_search_iteration()
+            self._run_search_iteration()
 
         # selecting from the direct children of the root the one containing the move with most number of simulations
         best_move_node = reduce(
@@ -38,15 +37,15 @@ class MCTS:
         )
         return best_move_node.data.move
 
-    def run_search_iteration(self):
-        select_leaf, select_model = self.select(copy.copy(self.model))
+    def _run_search_iteration(self) -> None:
+        select_leaf, select_model = self._select(copy.deepcopy(self.model))
 
         # print('selected node ', select_leaf)
-        expand_leaf, expand_model = self.expand(select_leaf, select_model)
+        expand_leaf, expand_model = self._expand(select_leaf, select_model)
 
         ## added
-        simulation_score = self.simulate(expand_leaf, expand_model)
-        self.backpropagate(expand_leaf, simulation_score)
+        simulation_score = self._simulate(expand_leaf, expand_model)
+        self._backpropagate(expand_leaf, simulation_score)
         if DEBUG:
             print(
                 "children list of ",
@@ -58,21 +57,19 @@ class MCTS:
                 print(child)
                 print("simulations ", child.data.simulations)
                 print("value ", child.data.value)
-                print("UCB1 ", self.UCB1(child, self.tree.get_root()))
+                print("UCB1 ", self._UCB1(child, self.tree.get_root()))
                 print("position", child.data.move)
                 print("player", child.data.move.player)
                 print(
                     "---------------------------------------------------------------------------------"
                 )
             input("Enter...")
-        return
 
-    def select(self, model: Model):
+    def _select(self, model: Model) -> tuple[Node, Model]:
         node = self.tree.get_root()
-        root_player = model.state.get_next_player_name(node.data.move.player)
-        model.state.redeterminize_hand(root_player)
-        while not node.is_leaf() and self.is_fully_explored(node, model):
-            node = self.get_best_child_UCB1(node)
+        model.state.redeterminize_hand(model.state.root_player_name)
+        while not node.is_leaf() and self._is_fully_explored(node, model):
+            node = self._get_best_child_UCB1(node)
             model.exit_node(node.data.player)  # restore hand
             model.make_move(node.data.move)
             model.enter_node(
@@ -80,14 +77,14 @@ class MCTS:
             )  # re-determinize hand
         return node, model
 
-    def is_fully_explored(self, node: Node, model: Model):
+    def _is_fully_explored(self, node: Node, model: Model) -> bool:
         """
         return True if there is no more moves playable at a certain level that has not been tried yet
         """
         # this function needs to be changed for the hanabi case
-        return len(self.get_available_plays(node, model)) == 0
+        return len(self._get_available_plays(node, model)) == 0
 
-    def get_available_plays(self, node: Node, model):
+    def _get_available_plays(self, node: Node, model) -> list[GameMove]:
         children = self.tree.get_children(node)
         player = model.state.get_next_player_name(node.data.move.player)
         # return only valid moves which haven't been already tried in children
@@ -98,12 +95,12 @@ class MCTS:
             )
         )
 
-    def expand(self, node: Node, model: Model):
+    def _expand(self, node: Node, model: Model) -> tuple[Node, Model]:
         expanded_node = None
 
         # model.check_win should check if the match is over, not if it is won (see simulation and backpropagation function)
         if not model.check_ended()[0]:
-            legal_moves = self.get_available_plays(node, model)
+            legal_moves = self._get_available_plays(node, model)
             random_move = np.random.choice(legal_moves)
             model.make_move(random_move)
             expanded_node = Node(GameNode(random_move))
@@ -116,7 +113,7 @@ class MCTS:
             print("expanding..")
         return expanded_node, model
 
-    def simulate(self, node: Node, model: Model):
+    def _simulate(self, node: Node, model: Model) -> int:
         current_player = node.data.move.player
 
         # here random moves are made until someone wins, then the winning player is passed to backpropagation function
@@ -135,7 +132,7 @@ class MCTS:
         return score
 
     # def backpropagate(self, node, winner: int):
-    def backpropagate(self, node: Node, score: int) -> None:
+    def _backpropagate(self, node: Node, score: int) -> None:
         # as the simulation function, this one needs to be changed
         # here nodes value is incremented if it leads to a winning game for the agent
         # but in our case need to be evaluated in proportion to the score
@@ -148,9 +145,8 @@ class MCTS:
             # print('parent node ', node)
             # print('is ', node.data.move.position, ' root? ', node.is_root())
         node.data.simulations += 1
-        return
 
-    def UCB1(self, node: Node, parent: Node, c: float = 0.1):
+    def _UCB1(self, node: Node, parent: Node, c: float = 0.1) -> float:
         exploitation = node.data.value / node.data.simulations
         if parent.data.simulations == 0:
             exploration = 0
@@ -160,9 +156,9 @@ class MCTS:
             )
         return exploitation + c * exploration
 
-    def get_best_child_UCB1(self, node: Node):
+    def _get_best_child_UCB1(self, node: Node) -> Node:
         node_scores = map(
-            lambda f: [f, self.UCB1(f, node)], self.tree.get_children(node)
+            lambda f: [f, self._UCB1(f, node)], self.tree.get_children(node)
         )
         return reduce(lambda a, b: a if a[1] > b[1] else b, list(node_scores))[0]
 

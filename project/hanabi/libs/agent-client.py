@@ -51,7 +51,7 @@ def main():
                     move = agent.make_move()
                     if move is not None:
                         if VERBOSE:
-                            print(f"At turn {agent.turn} I chose the move {move.action}:")
+                            # print(f"At turn {agent.turn} I chose the move {move.action}:")
                             if hasattr(move, 'handCardOrdered'):
                                 print(f"\tCard: {move.handCardOrdered}")
                             if hasattr(move, 'type') and hasattr(move, 'value'):
