@@ -1,6 +1,23 @@
+import copy
 from typing import List
 
-from mcts import GameNode
+from model import GameMove
+
+
+class GameNode:
+    def __init__(self, move: GameMove) -> None:
+        self.move = move
+        self.value = 0
+        self.simulations = 0
+
+    def __copy__(self):
+        cls = self.__class__
+        result = cls.__new__(cls)
+        # TODO: copy(None)
+        result.move = copy.copy(self.move)
+        result.value = self.value
+        result.simulations = self.simulations
+        return result
 
 
 class Node:

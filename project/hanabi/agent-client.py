@@ -26,7 +26,6 @@ def main():
     players = []
     agent = None
     run = True
-    hint_received = False
     statuses = ["Lobby", "Game", "GameHint"]
     status = statuses[0]
 

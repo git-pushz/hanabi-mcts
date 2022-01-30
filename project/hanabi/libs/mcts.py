@@ -1,7 +1,7 @@
 import copy
 
 from model import Model, GameMove
-from .tree import Tree, Node
+from tree import Tree, Node, GameNode
 from functools import reduce
 import numpy as np
 
@@ -13,22 +13,6 @@ def find(pred, iterable):
         if pred(element):
             return element
     return None
-
-
-class GameNode:
-    def __init__(self, move: GameMove) -> None:
-        self.move = move
-        self.value = 0
-        self.simulations = 0
-
-    def __copy__(self):
-        cls = self.__class__
-        result = cls.__new__(cls)
-        # TODO: copy(None)
-        result.move = copy.copy(self.move)
-        result.value = self.value
-        result.simulations = self.simulations
-        return result
 
 
 class MCTS:
@@ -53,7 +37,7 @@ class MCTS:
         return best_move_node.data.move
 
     def run_search_iteration(self):
-        select_leaf, select_model = self.select(self.model.copy())
+        select_leaf, select_model = self.select(copy.copy(self.model))
 
         # print('selected node ', select_leaf)
         expand_leaf, expand_model = self.expand(select_leaf, select_model)
@@ -83,12 +67,15 @@ class MCTS:
 
     def select(self, model: Model):
         node = self.tree.get_root()
+        root_player = model.state.get_next_player_name(node.data.move.player)
+        model.state.redeterminize_hand(root_player)
         while not node.is_leaf() and self.is_fully_explored(node, model):
-            player = model.state.get_next_player_name(node.data.move.player)
-            model.exit_node(player)  # re-determinize hand
             node = self.get_best_child_UCB1(node)
+            model.exit_node(node.data.player)  # restore hand
             model.make_move(node.data.move)
-            model.enter_node(player)  # restore hand
+            model.enter_node(
+                model.state.get_next_player_name(node.data.move.player)
+            )  # re-determinize hand
         return node, model
 
     def is_fully_explored(self, node: Node, model: Model):
@@ -134,21 +121,22 @@ class MCTS:
         # the problem is that in hanabi there is no winner (and probably moves can't be random)
         # so this function need some changes (at the end it needs to return the score)
 
-        # only one simulation has been run, probably it is better to run a bunch of simulations
+        # TODO only one simulation has been run, probably it is better to run a bunch of simulations
         while not model.check_ended()[0]:
             current_player = model.state.get_next_player_name(current_player)
             # if there are no more legal moves (=> draw)
             if not model.make_random_move(current_player):
                 break
         score = model.check_ended()[1]
+        assert score is not None
 
         return score
 
     # def backpropagate(self, node, winner: int):
-    def backpropagate(self, node: Node, score: int):
+    def backpropagate(self, node: Node, score: int) -> None:
         # as the simulation function, this one needs to be changed
         # here nodes value is incremented if it leads to a winning game for the agent
-        # but in our case need to be evalueted in proportion to the score
+        # but in our case need to be evaluated in proportion to the score
         # just to give and idea I implemented a simple version
         while not node.is_root():
             node.data.simulations += 1

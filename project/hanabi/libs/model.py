@@ -57,7 +57,7 @@ class GameMove:
         action_type: a string among ["play", "discard", "hint"]
         card_idx: (non-hint) the index in the hand of the played/discarded card
         destination: (hint-only) string, name of the destination player
-        hint_type: (hint-only) a string among ["rank", "color"]
+        hint_type: (hint-only) a string among ["value", "color"]
         hint_value: (hint-only) can be the color or the value of the card (depending on "action_type")
     """
 
@@ -126,7 +126,8 @@ class Model:
             player: the name of the player
         """
         if player != self.state.root_player_name:
-            self._saved_hand = self.state.hands[player]
+            # TODO deepcopy
+            self._saved_hand = copy.copy(self.state.hands[player])
             self.state.redeterminize_hand(player)
 
     def exit_node(self, player: str) -> None:
@@ -169,7 +170,7 @@ class Model:
                                 this_player,
                                 action_type,
                                 destination=player,
-                                hint_type="rank",
+                                hint_type="value",
                                 hint_value=rank,
                             )
                         )

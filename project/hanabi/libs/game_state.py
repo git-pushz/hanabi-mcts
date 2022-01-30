@@ -4,8 +4,7 @@ from enum import IntEnum
 
 import numpy as np
 from typing import List, Tuple
-
-from .. import GameData
+import GameData
 
 
 colors = ["red", "yellow", "green", "blue", "white"]
@@ -19,12 +18,20 @@ class Color(IntEnum):
     WHITE = 4
 
 
-color2enum = {
+color_str2enum = {
     "red": Color.RED,
     "yellow": Color.YELLOW,
     "green": Color.GREEN,
     "blue": Color.BLUE,
     "white": Color.WHITE,
+}
+
+color_enum2str = {
+    Color.RED: "red",
+    Color.YELLOW: "yellow",
+    Color.GREEN: "green",
+    Color.BLUE: "blue",
+    Color.WHITE: "white",
 }
 
 HAND_SIZE = 5
@@ -47,10 +54,16 @@ class Card:
         self.rank_known = False
         self.color_known = False
 
-    def reveal_rank(self):
+    def reveal_rank(self, rank=None):
+        if rank is not None:
+            # assert self.rank is None
+            self.rank = rank 
         self.rank_known = True
 
-    def reveal_color(self):
+    def reveal_color(self, color=None):
+        if color is not None:
+            # assert self.color is None
+            self.color = color
         self.color_known = True
 
     def is_fully_determined(self):
@@ -73,20 +86,14 @@ class Deck:
         if type(item) is tuple:
             return self._table[item[0], item[1]]
         else:
-            pass
+            raise IndexError
 
     def _decrement(self, rank: int, color: Color) -> None:
-        assert (
-            self._table[rank - 1][color] > 0,
-            "trying to decrement zero value from Deck",
-        )
+        assert self._table[rank - 1][color] > 0, "trying to decrement zero value from Deck"
         self._table[rank - 1][color] -= 1
 
     def _increment(self, rank: int, color: Color) -> None:
-        assert (
-            self._table[rank - 1][color] < CARD_QUANTITIES[rank - 1],
-            "trying to increment maximum value from Deck",
-        )
+        assert self._table[rank - 1][color] < CARD_QUANTITIES[rank - 1], "trying to increment maximum value from Deck"
         self._table[rank - 1][color] += 1
 
     def remove_cards(self, cards: List[Card]) -> None:
@@ -119,10 +126,7 @@ class Trash:
         self._table = np.tile(col, len(colors))
 
     def _decrement(self, rank: int, color: Color) -> None:
-        assert (
-            self._table[rank][color] > 0,
-            "trying to decrement zero value from Deck",
-        )
+        assert self._table[rank][color] > 0, "trying to decrement zero value from Deck"
         self._table[rank - 1][color] -= 1
         if self._table[rank - 1][color] == 0:
             self.maxima[color] = min(rank - 1, self.maxima[color])
@@ -169,7 +173,7 @@ class GameState:
                 player.name: GameState.server_to_client_hand(player.hand)
                 for player in data.players
             }
-            self.hands[root_player_name] = []
+            self.hands[root_player_name] = [Card(None, None) for _ in range(HAND_SIZE)]
             self.hints = data.usedNoteTokens
             self.errors = data.usedStormTokens
         else:
@@ -206,7 +210,7 @@ class GameState:
         """
         hand = []
         for card in server_hand:
-            hand.append(Card(rank=card.rank, color=card.color))
+            hand.append(Card(rank=card.value, color=card.color))
         return hand
 
     def remove_card_from_hand(self, player: str, card_idx: int) -> None:
@@ -221,15 +225,15 @@ class GameState:
         if player != self.root_player_name:
             self.deck.draw(rank=card.rank, color=card.color)
 
-    def give_hint(self, destination: str, hint_type: str, hint_value: int) -> None:
+    def give_hint(self, cards_idx: List[int], destination: str, hint_type: str, hint_value: int) -> None:
         """
         """
         hand = self.hands[destination]
-        for card in hand:
-            if hint_type == "rank" and card.rank == hint_value:
-                card.reveal_rank()
-            if hint_type == "color" and card.color == hint_value:
-                card.reveal_color()
+        for idx in cards_idx:
+            if hint_type == "value":
+                hand[idx].reveal_rank(hint_value)
+            elif hint_type == "color":
+                hand[idx].reveal_color(hint_value)
         self.hints += 1
 
     def update_trash(self, card: Card) -> None:
@@ -333,6 +337,17 @@ class MCTSState(GameState):
         next_player_idx = (current_player_idx + 1) % len(self.players)
         return self.players[next_player_idx]
 
+    def redeterminize_hand(self, player_name: str) -> None:
+        hand = self.hands[player_name]
+        self.deck.add_cards(hand)
+        for idx, card in enumerate(hand):
+            rank = card.rank if card.rank_known else None
+            color = card.color if card.color_known else None
+            new_card = self.deck.draw(rank=rank, color=color)
+            new_card.rank_known = card.rank_known
+            new_card.color_known = card.color_known
+            hand[idx] = new_card
+
     # MCTS
     def restore_hand(self, player_name: str, saved_hand: List[Card]) -> None:
         """
@@ -387,9 +402,6 @@ class MCTSState(GameState):
             if quantity > CARD_QUANTITIES[card.rank - 1]:
                 # TODO: idx not ok for index
                 cards[idx] = None
-
-    def redeterminize_hand(self, player):
-        pass
 
 ### TODO
 # * Gestire ultimo giro di giocate dopo che il mazzo e' finito

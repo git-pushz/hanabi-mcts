@@ -1,18 +1,32 @@
 from typing import List
+from game_state import GameState, Card, color_enum2str, color_str2enum
+from model import Model
+from mcts import MCTS
+import GameData
 
-from game_state import GameState, Card
-from .. import GameData
-
+DEBUG = False
+VERBOSE = True
+LOG = False
 
 class Agent:
     def __init__(self, name: str, data: GameData.ServerGameStateData, players_names: list):
         self.name = name
         self._game_state = GameState(players_names, name, data)
 
-    def make_move(self) -> None:
+    def make_move(self) -> GameData.ClientToServerData:
         """
         """
-        pass
+        mcts = MCTS(Model(self._game_state), self.name)
+        move = mcts.run_search()
+        if move.action_type == "hint":
+            hint_value = move.hint_value if move.hint_type == "value" else color_enum2str(move.hint_value)
+            return GameData.ClientHintData(self.name, move.destination, move.hint_type, hint_value)
+        elif move.action_type == "play":
+            return GameData.ClientPlayerPlayCardRequest(self.name, move.card_idx)
+        elif move.action_type == "discard":
+            return GameData.ClientPlayerDiscardCardRequest(self.name, move.card_idx)
+        else:
+            raise RuntimeError(f"Unknown action type received: {move.action_type}")
 
     def track_drawn_card(self, players: list) -> None:
         """
@@ -68,7 +82,7 @@ class Agent:
         """
         # - if passed card is NOT fully determined:
         #   the deck now knows that this card is in game -> update deck knowledge:
-        if not card.is_fully_determined:
+        if not card.is_fully_determined():
             card.reveal_color()
             card.reveal_rank()
             self._game_state.deck.remove_cards([card])  # update deck
@@ -81,15 +95,27 @@ class Agent:
         """
         self._game_state.card_correctly_played(card.color)
 
-    def assert_aligned_with_server(self) -> None:
+    def assert_aligned_with_server(self, hints_used: int, mistakes_made: int, trash: list, players: list) -> None:
         """
+        FOR DEBUG ONLY: assert that every internal structure is consistent with the server knowledge
+        Args:
+            hints_used: the number of hint tokens used in the actual game
+            mistakes_made: the number of mistakes made in the actual game
+            board: the actual current board game
+            trash: the list of actually discarded cards
+            players: the list of objects of class Player - they also store their hands
         """
-        pass
+        assert self._game_state.hints == hints_used, "wrong count of hints"
+        assert self._game_state.errors == mistakes_made, "wrong count of errors"
+        # b = [max(v) if len(v) > 0 else 0 for _, v in board.items()]
+        # assert self.board == b, f"wrong board: self.board: {self.board}, board: {board}"
+        assert self._game_state.trash == trash, " wrong trash"
+        for player in players:
+            assert player.hand == self._game_state.hands[player.name], f"player {player.name} wrong hand"
 
     def update_knowledge_on_hint(self, hint_type: str, hint_value: int, cards_idx: List[int], destination: str) -> None:
         """
         """
-        if destination == self.name:
-            pass
-        else:
-            pass
+        value = hint_value if hint_type == "value" else color_str2enum(hint_value)
+        self._game_state.give_hint(cards_idx, destination, hint_type, value)
+

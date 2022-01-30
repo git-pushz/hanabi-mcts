@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
-import sys
 from sys import argv, stdout
-from threading import Thread
-from threading import Condition
-from .. import GameData
+from threading import Thread, Condition
+import GameData
 import socket
 from constants import *
-# from agent import Agent, DEBUG, VERBOSE, LOG
+from agent import Agent, DEBUG, VERBOSE, LOG
 import os
 import traceback
 
@@ -26,7 +24,6 @@ def main():
     players = []
     agent = None
     run = True
-    hint_received = False
     statuses = ["Lobby", "Game", "GameHint"]
     status = statuses[0]
 
@@ -39,36 +36,6 @@ def main():
         if status == statuses[1]:
             s.send(GameData.ClientGetGameStateRequest(agent_name).serialize())
 
-    def discard_action(card_order):
-        try:
-            s.send(GameData.ClientPlayerDiscardCardRequest(agent_name, card_order).serialize())
-        except:
-            print("Maybe you wanted to type 'discard <num>'?")
-
-    def play_action(card_order):
-        if status == statuses[1]:
-            try:
-                s.send(GameData.ClientPlayerPlayCardRequest(agent_name, card_order).serialize())
-            except:
-                print("Maybe you wanted to type 'play <num>'?")
-
-    def hint_action(destination, t, value):
-        try:
-            if t != "colour" and t != "color" and t != "value":
-                if DEBUG:
-                    print("Error: type can be 'color' or 'value'")
-            if t == "value":
-                value = int(value)
-                if int(value) > 5 or int(value) < 1:
-                    if DEBUG:
-                        print("Error: card values can range from 1 to 5")
-            else:
-                if value not in ["green", "red", "blue", "yellow", "white"]:
-                    if DEBUG:
-                        print("Error: card color can only be green, red, blue, yellow or white")
-            s.send(GameData.ClientHintData(agent_name, destination, t, value).serialize())
-        except:
-            print("Maybe you wanted to type 'hint <type> <destinatary> <value>'?")
 
     def agent_move_thread():
         with cv:
@@ -284,8 +251,7 @@ def main():
                         print("\t" + str(i))
 
                 agent.hint_consumed()
-                if data.source != agent.name:
-                    agent.update_knowledge_on_hint(data.type, data.value, data.positions, data.destination)
+                agent.update_knowledge_on_hint(data.type, data.value, data.positions, data.destination)
 
                 check_agent_turn(data.player)
 
