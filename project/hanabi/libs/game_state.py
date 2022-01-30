@@ -5,7 +5,7 @@ from enum import IntEnum
 import numpy as np
 from typing import List, Tuple
 import GameData
-
+from constants import SEED
 
 colors = ["red", "yellow", "green", "blue", "white"]
 
@@ -72,9 +72,16 @@ class Card:
 
 class Deck:
     def __init__(self) -> None:
+        np.random.seed(SEED)
         col = np.array(CARD_QUANTITIES)
         col = col.reshape(col.size, 1)
         self._table = np.tile(col, len(colors))
+
+    def __deepcopy__(self, memo={}):
+        cls = self.__class__
+        result = cls.__new__(cls)
+        result._table = np.copy(self._table)
+        return result
 
     def __len__(self):
         """
@@ -93,7 +100,7 @@ class Deck:
         self._table[rank - 1][color] -= 1
 
     def _increment(self, rank: int, color: Color) -> None:
-        assert self._table[rank - 1][color] < CARD_QUANTITIES[rank - 1], "trying to increment maximum value from Deck"
+        assert (self._table[rank - 1][color] < CARD_QUANTITIES[rank - 1]), "trying to increment maximum value from Deck"
         self._table[rank - 1][color] += 1
 
     def remove_cards(self, cards: List[Card]) -> None:
@@ -107,7 +114,7 @@ class Deck:
     def draw(self, rank: int = None, color: Color = None) -> Card:
         rows, columns = np.nonzero(self._table)
         if rank is None:
-            rank = np.random.choice(rows)
+            rank = np.random.choice(rows) + 1
         if color is None:
             color = np.random.choice(columns)
         self._decrement(rank, color)
@@ -182,8 +189,9 @@ class GameState:
         self.board = [0] * 5
         self.trash = Trash()
         self.deck = Deck()
-        for hand in self.hands.values():
-            self.deck.remove_cards(hand)
+        for player, hand in self.hands.items():
+            if player != self.root_player_name:
+                self.deck.remove_cards(hand)
 
     def __deepcopy__(self, memo={}):
         cls = self.__class__
@@ -193,6 +201,7 @@ class GameState:
         result.hands = copy.deepcopy(self.hands)
         result.board = self.board[:]
         result.trash = copy.deepcopy(self.trash)
+        result.deck = copy.deepcopy(self.deck)
         result.hints = self.hints
         result.errors = self.errors
         return result
@@ -210,7 +219,7 @@ class GameState:
         """
         hand = []
         for card in server_hand:
-            hand.append(Card(rank=card.value, color=card.color))
+            hand.append(Card(rank=card.value, color=color_str2enum[card.color]))
         return hand
 
     def remove_card_from_hand(self, player: str, card_idx: int) -> None:
@@ -339,7 +348,9 @@ class MCTSState(GameState):
 
     def redeterminize_hand(self, player_name: str) -> None:
         hand = self.hands[player_name]
-        self.deck.add_cards(hand)
+        # TODO: CHECK THIS IF
+        if player_name != self.root_player_name:
+            self.deck.add_cards(hand)
         for idx, card in enumerate(hand):
             rank = card.rank if card.rank_known else None
             color = card.color if card.color_known else None

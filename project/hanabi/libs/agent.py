@@ -95,7 +95,7 @@ class Agent:
         """
         self._game_state.card_correctly_played(card.color)
 
-    def assert_aligned_with_server(self, hints_used: int, mistakes_made: int, trash: list, players: list) -> None:
+    def assert_aligned_with_server(self, hints_used: int, mistakes_made: int, board: list, trash: list, players: list) -> None:
         """
         FOR DEBUG ONLY: assert that every internal structure is consistent with the server knowledge
         Args:
@@ -109,7 +109,7 @@ class Agent:
         assert self._game_state.errors == mistakes_made, "wrong count of errors"
         # b = [max(v) if len(v) > 0 else 0 for _, v in board.items()]
         # assert self.board == b, f"wrong board: self.board: {self.board}, board: {board}"
-        assert self._game_state.trash == trash, " wrong trash"
+        # assert self._game_state.trash == trash, " wrong trash"
         for player in players:
             assert player.hand == self._game_state.hands[player.name], f"player {player.name} wrong hand"
 

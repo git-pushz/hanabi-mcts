@@ -6,6 +6,7 @@ import copy
 from typing import List, Tuple
 
 from game_state import GameState, MCTSState
+from constants import SEED
 
 NUM_COLUMNS = 7
 COLUMN_HEIGHT = 6
@@ -108,6 +109,7 @@ class GameMove:
 
 class Model:
     def __init__(self, game_state: GameState) -> None:
+        np.random.seed(SEED)
         self.state = MCTSState(game_state)
         self._saved_hand = None
 
@@ -200,6 +202,7 @@ class Model:
         elif move.action_type == "discard":
             self.state.discard_card(move.player, move.card_idx)
         elif move.action_type == "hint":
+            # TODO: THIS GIVE_HINT FUNCTION WANTS A LIST OF INDICES
             self.state.give_hint(move.destination, move.hint_type, move.hint_value)
         else:
             raise RuntimeError(f"Unknown action type: {move.action_type}")

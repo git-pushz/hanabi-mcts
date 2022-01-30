@@ -1,6 +1,7 @@
 import copy
 
 from model import Model, GameMove
+from constants import SEED
 from tree import Tree, Node, GameNode
 from functools import reduce
 import numpy as np
@@ -17,6 +18,7 @@ def find(pred, iterable):
 
 class MCTS:
     def __init__(self, model: Model, current_player: str):
+        np.random.seed(SEED)
         self.model = model
         prev_player = model.state.get_prev_player_name(current_player)
         root = Node(

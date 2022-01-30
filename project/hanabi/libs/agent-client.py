@@ -122,8 +122,7 @@ def main():
                     agent = Agent(agent_name, data, players)
                 else:
                     agent.track_drawn_card(data.players)
-                agent.assert_aligned_with_server(data.usedNoteTokens, data.usedStormTokens,
-                                                 data.tableCards, data.discardPile, data.players)
+                # agent.assert_aligned_with_server(data.usedNoteTokens, data.usedStormTokens, data.tableCards, data.discardPile, data.players)
                 check_agent_turn(data.currentPlayer)
 
             # 4 received when someone performs an invalid action
