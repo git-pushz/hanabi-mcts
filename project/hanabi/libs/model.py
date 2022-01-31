@@ -103,9 +103,9 @@ class GameMove:
 
 
 class Model:
-    def __init__(self, game_state: GameState) -> None:
-        # np.random.seed(SEED)
-        self.state = MCTSState(game_state)
+    def __init__(self, mcts_state: MCTSState) -> None:
+        np.random.seed(SEED)
+        self.state = mcts_state
         self._saved_hand = None
 
     def __deepcopy__(self, memo={}):
@@ -122,7 +122,7 @@ class Model:
         Args:
             player: the name of the player
         """
-        if player != self.state.root_player_name:
+        if player != self.state.root_player:
             # TODO deepcopy
             self._saved_hand = copy.copy(self.state.hands[player])
             self.state.redeterminize_hand(player)
@@ -134,7 +134,7 @@ class Model:
         Args:
             player: the name of the player
         """
-        if player != self.state.root_player_name and self._saved_hand is not None:
+        if player != self.state.root_player and self._saved_hand is not None:
             self.state.restore_hand(player, self._saved_hand)
             self._saved_hand = None
 
@@ -151,8 +151,11 @@ class Model:
 
         hand = self.state.hands[this_player]
         for idx, card in enumerate(hand):
-            for action_type in ["play", "discard"]:
-                moves.append(GameMove(this_player, action_type, card_idx=idx))
+            actions = ["play"]
+            if self.state.hints > 0:
+                actions.append("discard")
+            for action in actions:
+                moves.append(GameMove(this_player, action, card_idx=idx))
 
         if self.state.hints_available() > 0:
             action_type = "hint"

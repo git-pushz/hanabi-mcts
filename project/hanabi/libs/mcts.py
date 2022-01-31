@@ -1,5 +1,6 @@
 import copy
 from model import Model, GameMove
+from game_state import GameState, MCTSState
 from constants import SEED
 from tree import Tree, Node, GameNode
 from functools import reduce
@@ -16,16 +17,16 @@ def find(pred, iterable):
 
 
 class MCTS:
-    def __init__(self, model: Model, current_player: str) -> None:
-        # np.random.seed(SEED)
-        self.model = model
-        prev_player = model.state.get_prev_player_name(current_player)
+    def __init__(self, game_state: GameState, current_player: str) -> None:
+        np.random.seed(SEED)
+        self.game_state = game_state
+        prev_player = game_state.get_prev_player_name(current_player)
         root = Node(
             GameNode(GameMove(prev_player, action_type=None))
         )  # dummy game-move
         self.tree = Tree(root)
 
-    def run_search(self, iterations=50) -> GameMove:
+    def run_search(self, iterations: int = 50) -> GameMove:
         # each iteration represents the select, expand, simulate, backpropagate iteration
         for _ in range(iterations):
             self._run_search_iteration()
@@ -38,7 +39,7 @@ class MCTS:
         return best_move_node.data.move
 
     def _run_search_iteration(self) -> None:
-        select_leaf, select_model = self._select(copy.deepcopy(self.model))
+        select_leaf, select_model = self._select(Model(MCTSState(self.game_state)))
 
         # print('selected node ', select_leaf)
         expand_leaf, expand_model = self._expand(select_leaf, select_model)
@@ -67,10 +68,10 @@ class MCTS:
 
     def _select(self, model: Model) -> tuple[Node, Model]:
         node = self.tree.get_root()
-        model.state.redeterminize_hand(model.state.root_player_name)
+        # model.state.redeterminize_hand(model.state.root_player)
         while not node.is_leaf() and self._is_fully_explored(node, model):
             node = self._get_best_child_UCB1(node)
-            model.exit_node(node.data.player)  # restore hand
+            model.exit_node(node.data.move.player)  # restore hand
             model.make_move(node.data.move)
             model.enter_node(
                 model.state.get_next_player_name(node.data.move.player)

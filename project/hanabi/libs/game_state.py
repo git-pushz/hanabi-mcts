@@ -69,7 +69,7 @@ class Card:
 
 class Deck:
     def __init__(self) -> None:
-        # np.random.seed(SEED)
+        np.random.seed(SEED)
         col = np.array(CARD_QUANTITIES)
         col = col.reshape(col.size, 1)
         self._table = np.tile(col, len(colors))
@@ -93,11 +93,15 @@ class Deck:
             raise IndexError
 
     def _decrement(self, rank: int, color: Color) -> None:
-        assert self._table[rank - 1][color] > 0, "trying to decrement zero value from Deck"
+        assert (
+            self._table[rank - 1][color] > 0
+        ), "trying to decrement zero value from Deck"
         self._table[rank - 1][color] -= 1
 
     def _increment(self, rank: int, color: Color) -> None:
-        assert self._table[rank - 1][color] < CARD_QUANTITIES[rank - 1], "trying to increment maximum value from Deck"
+        assert (
+            self._table[rank - 1][color] < CARD_QUANTITIES[rank - 1]
+        ), "trying to increment maximum value from Deck"
         self._table[rank - 1][color] += 1
 
     def remove_cards(self, cards: list[Card]) -> None:
@@ -114,12 +118,12 @@ class Deck:
             pos = np.random.choice(rows.size)
             rank = rows[pos] + 1
             color = columns[pos]
-        elif rank is not None:
+        elif color is None:
             columns = np.nonzero(self._table[rank - 1, :])[0]
             color = np.random.choice(columns)
-        elif color is not None:
+        elif rank is None:
             rows = np.nonzero(self._table[:, color])[0]
-            color = np.random.choice(rows)
+            rank = np.random.choice(rows) + 1
         self._decrement(rank, color)
         return Card(rank, color)
 
@@ -136,7 +140,9 @@ class Trash:
         self._table = np.tile(col, len(colors))
 
     def _decrement(self, rank: int, color: Color) -> None:
-        assert self._table[rank - 1][color] > 0, "trying to decrement zero value from Deck"
+        assert (
+            self._table[rank - 1][color] > 0
+        ), "trying to decrement zero value from Trash"
         self._table[rank - 1][color] -= 1
         if self._table[rank - 1][color] == 0:
             self.maxima[color] = min(rank - 1, self.maxima[color])
@@ -150,7 +156,7 @@ class GameState:
     """
     Attributes:
         players:            list of player names in turn order
-        root_player_name:   name of the root player (agent)
+        root_player:   name of the root player (agent)
         hands:              dictionary with player names as keys and hands (list of cards) as values
         board:             successfully played cards (currently in the table)
         trash:              list of discarded cards
@@ -162,7 +168,7 @@ class GameState:
     def __init__(
         self,
         players_names: list[str],
-        root_player_name: str,
+        root_player: str,
         data: GameData.ServerGameStateData = None,
     ) -> None:
         """
@@ -170,14 +176,14 @@ class GameState:
 
         Args:
             players_names: the list of the player names in turn order
-            root_player_name: the name of the root player (agent)
+            root_player: the name of the root player (agent)
             data: the server game state to use to initialize the client game state
         """
         global HAND_SIZE
         if len(players_names) >= 4:
             HAND_SIZE = 4
         self.players = copy.deepcopy(players_names)
-        self.root_player_name = root_player_name
+        self.root_player = root_player
         if data is not None:
             self.board = [0] * 5
             self.deck = Deck()
@@ -188,16 +194,16 @@ class GameState:
                 player.name: GameState.server_to_client_hand(player.hand)
                 for player in data.players
             }
-            self.hands[root_player_name] = [Card(None, None) for _ in range(HAND_SIZE)]
+            self.hands[root_player] = [Card(None, None) for _ in range(HAND_SIZE)]
             for player, hand in self.hands.items():
-                if player != self.root_player_name:
+                if player != self.root_player:
                     self.deck.remove_cards(hand)
 
     def __deepcopy__(self, memo={}):
         cls = self.__class__
         result = cls.__new__(cls)
         result.players = copy.deepcopy(self.players)
-        result.root_player_name = copy.copy(self.root_player_name)
+        result.root_player = copy.copy(self.root_player)
         result.hands = copy.deepcopy(self.hands)
         result.board = self.board[:]
         result.trash = copy.deepcopy(self.trash)
@@ -222,15 +228,27 @@ class GameState:
             hand.append(Card(rank=card.value, color=color_str2enum[card.color]))
         return hand
 
+    def get_prev_player_name(self, current_player: str) -> str:
+        current_player_idx = self.players.index(current_player)
+        prev_player_idx = current_player_idx - 1
+        if prev_player_idx < 0:
+            prev_player_idx = len(self.players) - 1
+        return self.players[prev_player_idx]
+
+    def get_next_player_name(self, current_player: str) -> str:
+        current_player_idx = self.players.index(current_player)
+        next_player_idx = (current_player_idx + 1) % len(self.players)
+        return self.players[next_player_idx]
+
     def remove_card_from_hand(self, player: str, card_idx: int) -> None:
         """ """
         del self.hands[player][card_idx]
 
     def append_card_to_player_hand(self, player: str, card: Card):
         """ """
+        # player is never self.root_player
         self.hands[player].append(card)
-        if player != self.root_player_name:
-            self.deck.draw(rank=card.rank, color=card.color)
+        self.deck.remove_cards([card])
 
     def give_hint(
         self, cards_idx: list[int], destination: str, hint_type: str, hint_value: int
@@ -244,8 +262,8 @@ class GameState:
                 hand[idx].reveal_color(hint_value)
         self.hints += 1
 
-    def discover_card(self, rank: int, color: Color, card_idx: int) -> None:
-        card = self.hands[self.root_player_name][card_idx]
+    def discover_card_root(self, rank: int, color: Color, card_idx: int) -> None:
+        card = self.hands[self.root_player][card_idx]
         if not card.is_fully_determined():
             card.reveal_rank(rank)
             card.reveal_color(color)
@@ -300,7 +318,7 @@ class MCTSState(GameState):
     def __init__(self, initial_state: GameState) -> None:
         super().__init__(
             copy.deepcopy(initial_state.players),
-            copy.copy(initial_state.root_player_name),
+            copy.copy(initial_state.root_player),
         )
         self.hands = copy.deepcopy(initial_state.hands)
         self.board = initial_state.board[:]
@@ -308,6 +326,12 @@ class MCTSState(GameState):
         self.trash = copy.deepcopy(initial_state.trash)
         self.hints = initial_state.hints
         self.errors = initial_state.errors
+        # determinize root's hand
+        root_hand = self.hands[self.root_player]
+        for idx, card in enumerate(root_hand):
+            if not card.is_fully_determined():
+                assert card.rank is None or card.color is None
+                root_hand[idx] = self.deck.draw(rank=card.rank, color=card.color)
 
     # MCTS
     def play_card(self, player: str, card_idx: int) -> None:
@@ -323,7 +347,7 @@ class MCTSState(GameState):
         """
         card = self.hands[player].pop(card_idx)
         self.hands[player].append(self.deck.draw())
-        # if player == self.root_player_name and not card.is_fully_determined():
+        # if player == self.root_player and not card.is_fully_determined():
         #     self.deck.remove_cards([card])
         if self.board[card.color] == card.rank - 1:
             self.board[card.color] += 1
@@ -344,10 +368,10 @@ class MCTSState(GameState):
             card_idx: the index of the card in the player's hand
         """
         card = self.hands[player].pop(card_idx)
-        self.hands[player].append(self.deck.draw())
-        # if player == self.root_player_name and not card.is_fully_determined():
-        #     self.deck.remove_cards([card])
         self.trash.append(card)
+        self.hands[player].append(self.deck.draw())
+        # if player == self.root_player and not card.is_fully_determined():
+        #     self.deck.remove_cards([card])
         self.hints = max(self.hints - 1, 0)
 
     def give_hint(self, destination: str, hint_type: str, hint_value: int) -> None:
@@ -366,27 +390,11 @@ class MCTSState(GameState):
     def hints_available(self) -> int:
         return MAX_HINTS - self.hints
 
-    # MCTS
-    def get_prev_player_name(self, current_player: str) -> str:
-        current_player_idx = self.players.index(current_player)
-        prev_player_idx = current_player_idx - 1
-        if prev_player_idx < 0:
-            prev_player_idx = len(self.players) - 1
-        return self.players[prev_player_idx]
-
-    # MCTS
-    def get_next_player_name(self, current_player: str) -> str:
-        current_player_idx = self.players.index(current_player)
-        next_player_idx = (current_player_idx + 1) % len(self.players)
-        return self.players[next_player_idx]
-
     def redeterminize_hand(self, player_name: str) -> None:
         hand = self.hands[player_name]
-        if player_name == self.root_player_name:
-            cards = filter(lambda card: card.is_fully_determined(), hand)
-        else:
-            cards = hand
-        self.deck.add_cards(cards)
+        if player_name == self.root_player:
+            raise RuntimeError("Cannot re-determinize root player's hand")
+        self.deck.add_cards(hand)
         for idx, card in enumerate(hand):
             rank = card.rank if card.rank_known else None
             color = card.color if card.color_known else None
@@ -436,8 +444,7 @@ class MCTSState(GameState):
         for p in self.players:
             locations += self.hands[p]
 
-        for idx in range(len(cards)):
-            card = cards[idx]
+        for idx, card in enumerate(cards):
             if card is None:
                 continue
             quantity = 1 + self.deck[card.rank, card.color]  # 1 is for "card" itself
