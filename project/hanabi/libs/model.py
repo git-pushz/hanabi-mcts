@@ -4,7 +4,6 @@ import copy
 from typing import Tuple, List
 
 from game_state import GameState, MCTSState
-from constants import SEED
 
 NUM_COLUMNS = 7
 COLUMN_HEIGHT = 6

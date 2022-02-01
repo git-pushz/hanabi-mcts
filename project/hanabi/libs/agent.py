@@ -1,7 +1,6 @@
 from typing import List
 
 import numpy as np
-from constants import SEED
 from game_state import GameState, Card, color_enum2str, color_str2enum
 from mcts import MCTS
 import GameData
@@ -9,6 +8,7 @@ import GameData
 DEBUG = False
 VERBOSE = True
 LOG = False
+SEED = None
 
 
 class Agent:

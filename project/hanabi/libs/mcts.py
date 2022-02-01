@@ -4,7 +4,6 @@ from typing import Tuple, List
 
 from model import Model, GameMove
 from game_state import GameState, MCTSState
-from constants import SEED
 from tree import Tree, Node, GameNode
 from functools import reduce
 import numpy as np

@@ -5,7 +5,6 @@ import numpy as np
 from typing import List, Tuple
 
 import GameData
-from constants import SEED
 import game
 
 colors = ["red", "yellow", "green", "blue", "white"]

@@ -2,7 +2,6 @@ from copy import deepcopy
 from random import shuffle, Random
 import GameData
 import logging
-from constants import SEED
 
 class Card(object):
     def __init__(self, id, value, color) -> None:
