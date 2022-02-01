@@ -231,7 +231,7 @@ class Deck:
                 assert (
                     self._reserved_ranks[rank - 1] > 0
                 ), f"No card with rank{rank} was previously reserved"
-                self._reserved_colors[rank - 1] -= 1
+                self._reserved_ranks[rank - 1] -= 1
                 possibilities = [
                     c for c in range(table.shape[1]) for _ in range(table[rank - 1][c])
                 ]
