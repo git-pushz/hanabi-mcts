@@ -151,7 +151,7 @@ class Agent:
     def known_status(self) -> str:
         s = f"At turn {self.turn} my knowledge is\n"
         s += f"Board: {self._game_state.board}\n"
-        s += f"Hands:"
+        s += "Hands:"
         for p, h in self._game_state.hands.items():
             s += f"\tPlayer {p}: {h}\n"
         s += f"\nTrash: {self._game_state.trash}\n"
