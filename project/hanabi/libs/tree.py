@@ -1,6 +1,4 @@
 import copy
-from typing import List
-
 from model import GameMove
 
 
@@ -51,7 +49,7 @@ class Tree:
     def get_root(self):
         return self.nodes[0]
 
-    def get_children(self, node: Node) -> List[Node]:
+    def get_children(self, node: Node) -> list[Node]:
         if not node:
             return []
         arr = []

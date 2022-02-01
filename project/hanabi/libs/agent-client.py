@@ -50,8 +50,8 @@ def main():
                 try:
                     move = agent.make_move()
                     if move is not None:
-                        if VERBOSE:
-                            print(f"At turn {agent.turn} I chose the move {move.action}:")
+                        if True:
+                            print(f"I chose the move {move.action}:")
                             if hasattr(move, 'handCardOrdered'):
                                 print(f"\tCard: {move.handCardOrdered}")
                             if hasattr(move, 'type') and hasattr(move, 'value'):
@@ -122,8 +122,7 @@ def main():
                     agent = Agent(agent_name, data, players)
                 else:
                     agent.track_drawn_card(data.players)
-                agent.assert_aligned_with_server(data.usedNoteTokens, data.usedStormTokens,
-                                                 data.tableCards, data.discardPile, data.players)
+                # agent.assert_aligned_with_server(data.usedNoteTokens, data.usedStormTokens, data.tableCards, data.discardPile, data.players)
                 check_agent_turn(data.currentPlayer)
 
             # 4 received when someone performs an invalid action
@@ -136,7 +135,7 @@ def main():
                 run = False
                 # decrement turn because this notify will make the agent take another decision (in the current turn)
                 # in the make_move, which by default increments the turns count
-                agent.turn -= 1
+                # agent.turn -= 1
                 with cv:
                     cv.notify()
 
