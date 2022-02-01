@@ -158,3 +158,9 @@ class Agent:
         s += f"Used hints: {self._game_state.hints}\n"
         s += f"Errors made: {self._game_state.errors}\n"
         return s
+
+# TODO
+# * Gestire le ultime giocate (quando il mazzo si svuota), sia nella partita "reale" che nelle simulazioni MC
+#   * Dedurre le ultime carte non determinate della mano / del mazzo
+# * Gestire l'ultimo giro a 4 carte (se il server lo richiede)
+# * Implementare le 9 regole per ridurre il branching factor nel MCTS

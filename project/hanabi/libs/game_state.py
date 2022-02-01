@@ -346,7 +346,6 @@ class MCTSState(GameState):
             if self.board[card.color] >= card.rank:
                 quantity += 1
             if quantity > CARD_QUANTITIES[card.rank - 1]:
-                # TODO: idx not ok for index
                 cards[idx] = None
 
     def assert_consistency(self):
@@ -373,5 +372,4 @@ class MCTSState(GameState):
 
 
 ### TODO
-# * Gestire ultimo giro di giocate dopo che il mazzo e' finito
 # * to_string per la classe Tree

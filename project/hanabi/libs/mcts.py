@@ -130,7 +130,6 @@ class MCTS:
         # the problem is that in hanabi there is no winner (and probably moves can't be random)
         # so this function need some changes (at the end it needs to return the score)
 
-        # TODO only one simulation has been run, probably it is better to run a bunch of simulations
         while not model.check_ended()[0]:
             current_player = model.state.get_next_player_name(current_player)
             # if there are no more legal moves (=> draw)
@@ -171,18 +170,3 @@ class MCTS:
             lambda f: [f, self._UCB1(f, node)], self.tree.get_children(node)
         )
         return reduce(lambda a, b: a if a[1] > b[1] else b, list(node_scores))[0]
-
-
-## TODO
-# in mcts.py
-# adapt function is_fully_explored (medium)
-# actually the problem is when it calls get_available_plays
-# adapt function simulate (hard)
-# adapt function backpropagate (easy)
-
-# in model.py
-# adapt valid_moves (medium)
-# adapt make_move (medium)
-# adapt make_random_move (that should be changed to make_intentional_move) (hard)
-# adapt check_win (that should be changed to check_if_ended) (medium)
-#
