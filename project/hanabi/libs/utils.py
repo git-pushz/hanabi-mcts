@@ -193,7 +193,7 @@ class Deck:
 
             update_table = True
             iteration = 0
-            max_iterations = 1000
+            max_iterations = 100
 
             while update_table:
                 update_table = False
