@@ -196,13 +196,16 @@ class Deck:
 
             update_table = True
             iteration = 0
-            max_iterations = 100
+            max_iterations = 1000
 
             while update_table:
                 update_table = False
 
                 iteration += 1
                 if iteration > max_iterations:
+                    print(f"Rank: {rank}")
+                    print(f"Color: {color}")
+                    print(table)
                     raise RuntimeError("Stuck in draw2")
 
                 if rank is None:
@@ -423,6 +426,7 @@ class GameState:
     def use_hint(self) -> None:
         """ """
         if self.hints == MAX_HINTS:
+            # TODO: check this
             raise RuntimeError("Trying to use more token hints than allowed")
         self.hints += 1
 
