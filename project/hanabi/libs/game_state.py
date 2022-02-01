@@ -207,7 +207,6 @@ class MCTSState(GameState):
         root_hand = self.hands[self.root_player]
         for idx, card in enumerate(root_hand):
             if not card.is_fully_determined():
-                assert card.rank is None or card.color is None
                 new_card = self.deck.draw(rank=card.rank, color=card.color)
                 assert new_card.rank is not None and new_card.color is not None
                 new_card.rank_known = card.rank_known
