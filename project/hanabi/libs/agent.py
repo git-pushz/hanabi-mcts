@@ -15,10 +15,12 @@ class Agent:
     ):
         self.name = name
         self._game_state = GameState(players_names, name, data)
+        self.turn = 0
         np.random.seed(SEED)
 
     def make_move(self) -> GameData.ClientToServerData:
         """ """
+        self.turn += 1
         mcts = MCTS(self._game_state, self.name)
         move = mcts.run_search(50)
         if move.action_type == "hint":
@@ -100,6 +102,13 @@ class Agent:
         """ """
         self._game_state.card_correctly_played(color_str2enum[card.color])
 
+    def update_knowledge_on_hint(
+        self, hint_type: str, hint_value: int, cards_idx: list[int], destination: str
+    ) -> None:
+        """ """
+        value = hint_value if hint_type == "value" else color_str2enum[hint_value]
+        self._game_state.give_hint(cards_idx, destination, hint_type, value)
+
     def assert_aligned_with_server(
         self,
         hints_used: int,
@@ -149,10 +158,3 @@ class Agent:
                     assert (
                         client_hand[idx] == player.hand[idx]
                     ), f"player {player.name} wrong card in hand at idx {idx}"
-
-    def update_knowledge_on_hint(
-        self, hint_type: str, hint_value: int, cards_idx: list[int], destination: str
-    ) -> None:
-        """ """
-        value = hint_value if hint_type == "value" else color_str2enum[hint_value]
-        self._game_state.give_hint(cards_idx, destination, hint_type, value)

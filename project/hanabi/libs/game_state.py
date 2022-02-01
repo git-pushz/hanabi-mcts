@@ -112,7 +112,7 @@ class Deck:
 
     def __getitem__(self, item):
         if type(item) is tuple:
-            return self._table[item[0], item[1]]
+            return self._table[item[0] - 1, item[1]]
         else:
             raise IndexError
 
@@ -200,9 +200,11 @@ class Deck:
 
             while update_table:
                 update_table = False
+
                 iteration += 1
                 if iteration > max_iterations:
                     raise RuntimeError("Stuck in draw2")
+
                 if rank is None:
                     # if no rank is specified, do not pick any rank-reserved card
                     r_idx = np.sum(table, axis=1) <= self._reserved_ranks
@@ -222,7 +224,6 @@ class Deck:
                     for coordinates, occurrencies in np.ndenumerate(table)
                     for _ in range(occurrencies)
                 ]
-
                 rank, color = random.choice(possibilities)
                 rank += 1
 
@@ -384,7 +385,8 @@ class GameState:
     def append_card_to_player_hand(self, player: str, card: Card):
         """ """
         self.hands[player].append(card)
-        if player != self.root_player:
+        if card.rank is not None and card.color is not None:
+            assert player != self.root_player
             self.deck.remove_cards([card])
 
     def give_hint(
@@ -397,6 +399,8 @@ class GameState:
                 hand[idx].reveal_rank(hint_value)
             elif hint_type == "color":
                 hand[idx].reveal_color(hint_value)
+            if destination == self.root_player and hand[idx].is_fully_determined():
+                self.deck.remove_cards([hand[idx]])
         self.hints += 1
 
     def discover_card_root(self, rank: int, color: Color, card_idx: int) -> None:
@@ -566,7 +570,9 @@ class MCTSState(GameState):
         self.deck.add_cards(self.hands[player_name])  # put cards back in deck
         self.hands[player_name] = []
         self._remove_illegal_cards(saved_hand)  # remove inconsistencies
-        self.deck.remove_cards(filter(lambda card: card is not None, saved_hand))  # pick cards from deck
+        self.deck.remove_cards(
+            filter(lambda card: card is not None, saved_hand)
+        )  # pick cards from deck
         self._determinize_empty_slots(saved_hand)
         self.hands[player_name] = saved_hand
 
