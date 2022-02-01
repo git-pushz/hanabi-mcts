@@ -261,7 +261,7 @@ def main():
                     print(data.data)
                 # decrement turn because this notify will make the agent take another decision (in the current turn)
                 # in the make_move, which by default increments the turns count
-                agent.turn -= len(agent.players)
+                # agent.turn -= len(agent.players)
                 with cv:
                     cv.notify()
                 # something went wrong, it shouldn't happen

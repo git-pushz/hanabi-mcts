@@ -1,6 +1,8 @@
 import copy
 from enum import IntEnum
 import numpy as np
+from typing import List, Tuple
+
 import GameData
 from constants import SEED
 
@@ -104,11 +106,11 @@ class Deck:
         ), "trying to increment maximum value from Deck"
         self._table[rank - 1][color] += 1
 
-    def remove_cards(self, cards: list[Card]) -> None:
+    def remove_cards(self, cards: List[Card]) -> None:
         for card in cards:
             self._decrement(card.rank, card.color)
 
-    def add_cards(self, cards: list[Card]) -> None:
+    def add_cards(self, cards: List[Card]) -> None:
         for card in cards:
             self._increment(card.rank, card.color)
 
@@ -167,7 +169,7 @@ class GameState:
 
     def __init__(
         self,
-        players_names: list[str],
+        players_names: List[str],
         root_player: str,
         data: GameData.ServerGameStateData = None,
     ) -> None:
@@ -213,7 +215,7 @@ class GameState:
         return result
 
     @staticmethod
-    def server_to_client_hand(server_hand: list) -> list[Card]:
+    def server_to_client_hand(server_hand: list) -> List[Card]:
         """
         Generate a client-hand (list of cards) given a server-hand
 
@@ -251,7 +253,7 @@ class GameState:
         self.deck.remove_cards([card])
 
     def give_hint(
-        self, cards_idx: list[int], destination: str, hint_type: str, hint_value: int
+        self, cards_idx: List[int], destination: str, hint_type: str, hint_value: int
     ) -> None:
         """ """
         hand = self.hands[destination]
@@ -298,7 +300,7 @@ class GameState:
         self.board[color] += 1
         self.hints = max(0, self.hints - 1)  # gain an hint if possible
 
-    def game_ended(self) -> tuple[bool, int]:
+    def game_ended(self) -> Tuple[bool, int]:
         """
         Checks if the game is ended for some reason. If it's ended, it returns True and the score of the game.
         If the game isn't ended, it returns False, None
@@ -404,7 +406,7 @@ class MCTSState(GameState):
             hand[idx] = new_card
 
     # MCTS
-    def restore_hand(self, player_name: str, saved_hand: list[Card]) -> None:
+    def restore_hand(self, player_name: str, saved_hand: List[Card]) -> None:
         """
         Restore the specified hand for the specified player, removing all the "illegal" cards
         and re-determinizing their slots
@@ -420,7 +422,7 @@ class MCTSState(GameState):
         self.hands[player_name] = saved_hand
 
     # MCTS
-    def _determinize_empty_slots(self, hand: list[Card]) -> None:
+    def _determinize_empty_slots(self, hand: List[Card]) -> None:
         """
         Determinize the empty slots of the hand (where card = None)
 
@@ -432,7 +434,7 @@ class MCTSState(GameState):
                 hand[idx] = self.deck.draw()
 
     # MCTS
-    def _remove_illegal_cards(self, cards: list[Card]) -> None:
+    def _remove_illegal_cards(self, cards: List[Card]) -> None:
         """
         Remove the illegal cards from the list (considering all the cards in the trash,
         in the player's hands and on the table)

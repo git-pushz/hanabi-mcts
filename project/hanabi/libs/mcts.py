@@ -1,4 +1,7 @@
 import copy
+
+from typing import Tuple, List
+
 from model import Model, GameMove
 from game_state import GameState, MCTSState
 from constants import SEED
@@ -66,7 +69,7 @@ class MCTS:
                 )
             input("Enter...")
 
-    def _select(self, model: Model) -> tuple[Node, Model]:
+    def _select(self, model: Model) -> Tuple[Node, Model]:
         node = self.tree.get_root()
         # model.state.redeterminize_hand(model.state.root_player)
         while not node.is_leaf() and self._is_fully_explored(node, model):
@@ -85,7 +88,7 @@ class MCTS:
         # this function needs to be changed for the hanabi case
         return len(self._get_available_plays(node, model)) == 0
 
-    def _get_available_plays(self, node: Node, model) -> list[GameMove]:
+    def _get_available_plays(self, node: Node, model) -> List[GameMove]:
         children = self.tree.get_children(node)
         player = model.state.get_next_player_name(node.data.move.player)
         # return only valid moves which haven't been already tried in children
@@ -96,7 +99,7 @@ class MCTS:
             )
         )
 
-    def _expand(self, node: Node, model: Model) -> tuple[Node, Model]:
+    def _expand(self, node: Node, model: Model) -> Tuple[Node, Model]:
         expanded_node = None
 
         # model.check_win should check if the match is over, not if it is won (see simulation and backpropagation function)

@@ -1,5 +1,8 @@
 import numpy as np
 import copy
+
+from typing import Tuple, List
+
 from game_state import GameState, MCTSState
 from constants import SEED
 
@@ -138,7 +141,7 @@ class Model:
             self.state.restore_hand(player, self._saved_hand)
             self._saved_hand = None
 
-    def valid_moves(self, this_player: str) -> list[GameMove]:
+    def valid_moves(self, this_player: str) -> List[GameMove]:
         """
         Returns all possible moves available at the current state
         (that correspond to a certain tree level
@@ -219,7 +222,7 @@ class Model:
         self.make_move(random_move)
         return True
 
-    def check_ended(self) -> tuple[bool, int]:
+    def check_ended(self) -> Tuple[bool, int]:
         """
         Returns True and the score of the game, if the game is ended. Returns False, None otherwise.
         """

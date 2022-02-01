@@ -1,5 +1,6 @@
+from typing import List
+
 from game_state import GameState, Card, color_enum2str, color_str2enum
-from model import Model
 from mcts import MCTS
 import GameData
 
@@ -107,7 +108,7 @@ class Agent:
         for player in players:
             assert player.hand == self._game_state.hands[player.name], f"player {player.name} wrong hand"
 
-    def update_knowledge_on_hint(self, hint_type: str, hint_value: int, cards_idx: list[int], destination: str) -> None:
+    def update_knowledge_on_hint(self, hint_type: str, hint_value: int, cards_idx: List[int], destination: str) -> None:
         """
         """
         value = hint_value if hint_type == "value" else color_str2enum[hint_value]
