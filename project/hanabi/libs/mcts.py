@@ -7,6 +7,7 @@ from functools import reduce
 import numpy as np
 
 DEBUG = False
+SIMULATIONS_NUMBER = 50
 
 
 def find(pred, iterable):
@@ -18,7 +19,6 @@ def find(pred, iterable):
 
 class MCTS:
     def __init__(self, game_state: GameState, current_player: str) -> None:
-        np.random.seed(SEED)
         self.game_state = game_state
         prev_player = game_state.get_prev_player_name(current_player)
         root = Node(
@@ -45,7 +45,10 @@ class MCTS:
         expand_leaf, expand_model = self._expand(select_leaf, select_model)
 
         ## added
-        simulation_score = self._simulate(expand_leaf, expand_model)
+        simulation_score = 0
+        for _ in range(SIMULATIONS_NUMBER):
+            simulation_score += self._simulate(expand_leaf, copy.deepcopy(expand_model))
+        simulation_score /= SIMULATIONS_NUMBER
         self._backpropagate(expand_leaf, simulation_score)
         if DEBUG:
             print(
