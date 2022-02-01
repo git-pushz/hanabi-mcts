@@ -154,6 +154,7 @@ class Model:
         hand = self.state.hands[this_player]
         for idx, card in enumerate(hand):
             actions = []
+            # if card.rank_known or (card.color_known and self.state.board[card.color] == card.rank - 1):
             if card.rank_known:
                 actions.append("play")
             if self.state.hints > 0:
