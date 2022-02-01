@@ -72,6 +72,12 @@ class Card:
     def __ne__(self, other):
         return not self.__eq__(other)
 
+    def __repr__(self):
+        rank = str(self.rank) if self.rank is not None else "unknown rank"
+        color = color_enum2str[self.color] if self.color is not None else "unknown color"
+
+        return f"Card {rank} {color}"
+
     def reveal_rank(self, rank=None):
         if rank is not None:
             # assert self.rank is None
@@ -112,7 +118,12 @@ class Deck:
 
     def __getitem__(self, item):
         if type(item) is tuple:
-            return self._table[item[0] - 1, item[1]]
+            if type(item[0]) is int and type(item[1]) is int or type(item[1]) is Color:
+                return self._table[item[0] - 1, item[1]]
+            elif type(item[0]) is slice and type(item[1]) is slice:
+                return self._table[item[0], item[1]]
+            else:
+                raise IndexError
         else:
             raise IndexError
 
@@ -268,6 +279,9 @@ class Trash:
         col = np.array(CARD_QUANTITIES)
         col = col.reshape(col.size, 1)
         self._table = np.tile(col, len(colors))
+
+    def __repr__(self):
+        return str(self.list)
 
     def __deepcopy__(self, memo={}):
         cls = self.__class__
@@ -481,6 +495,7 @@ class MCTSState(GameState):
                 new_card.rank_known = card.rank_known
                 new_card.color_known = card.color_known
                 root_hand[idx] = new_card
+        self.assert_consistency()
 
     # MCTS
     def play_card(self, player: str, card_idx: int) -> None:
@@ -622,7 +637,7 @@ class MCTSState(GameState):
         col = np.array(CARD_QUANTITIES)
         col = col.reshape(col.size, 1)
         full_table = np.tile(col, len(colors))
-        table = np.copy(self.deck[:, :])
+        table = np.copy(self.deck[slice(5), slice(5)])
 
         # trash
         trash_table = full_table - self.trash.get_table()

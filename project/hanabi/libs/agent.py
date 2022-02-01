@@ -8,7 +8,7 @@ import GameData
 DEBUG = False
 VERBOSE = True
 LOG = False
-SEED = None
+SEED = 27
 
 
 class Agent:
@@ -163,3 +163,15 @@ class Agent:
                     assert (
                         client_hand[idx] == player.hand[idx]
                     ), f"player {player.name} wrong card in hand at idx {idx}"
+
+    def known_status(self) -> str:
+        s = f"At turn {self.turn} my knowledge is\n"
+        s += f"Board: {self._game_state.board}\n"
+        s += f"Hands:"
+        for p, h in self._game_state.hands.items():
+            s += f"\tPlayer {p}: {h}\n"
+        s += f"\nTrash: {self._game_state.trash}\n"
+        s += f"Used hints: {self._game_state.hints}\n"
+        s += f"Errors made: {self._game_state.errors}\n"
+        return s
+

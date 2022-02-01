@@ -42,6 +42,7 @@ def main():
                 if DEBUG or VERBOSE:
                     print("waiting on cv")
                 cv.wait()  # wait for our turn
+                print(agent.known_status())
                 if not run:
                     break
                 if DEBUG or VERBOSE:
