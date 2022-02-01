@@ -1,4 +1,5 @@
 import copy
+import random
 from enum import IntEnum
 import numpy as np
 from typing import List, Tuple
@@ -163,7 +164,7 @@ class Deck:
                 for c in range(len(Color))
                 for _ in range(self._table[r][c])
             ]
-            rank, color = np.random.choice(possibilities)
+            rank, color = random.choice(possibilities)
             rank += 1
         elif rank is not None:
             # rows = np.nonzero(self._table[:, color])[0]
@@ -171,7 +172,7 @@ class Deck:
             possibilities = [
                 c for c in range(len(Color)) for _ in range(self._table[rank - 1][c])
             ]
-            color = np.random.choice(possibilities)
+            color = random.choice(possibilities)
             assert color is not None
         elif color is not None:
             # columns = np.nonzero(self._table[rank - 1, :])[0]
@@ -181,7 +182,7 @@ class Deck:
                 for r in range(len(CARD_QUANTITIES))
                 for _ in range(self._table[r][color])
             ]
-            rank = np.random.choice(possibilities) + 1
+            rank = random.choice(possibilities) + 1
             assert rank is not None
         self._decrement(rank, color)
         return Card(rank, color)
@@ -227,7 +228,7 @@ class Deck:
                     for coordinates, occurrencies in np.ndenumerate(table)
                     for _ in range(occurrencies)
                 ]
-                rank, color = np.random.choice(possibilities)
+                rank, color = random.choice(possibilities)
                 rank += 1
 
             # known rank
@@ -239,7 +240,7 @@ class Deck:
                 possibilities = [
                     c for c in range(table.shape[1]) for _ in range(table[rank - 1][c])
                 ]
-                color = np.random.choice(possibilities)
+                color = random.choice(possibilities)
 
             # known color
             elif color is not None:
@@ -250,7 +251,7 @@ class Deck:
                 possibilities = [
                     r for r in range(table.shape[0]) for _ in range(table[r][color])
                 ]
-                rank = np.random.choice(possibilities) + 1
+                rank = random.choice(possibilities) + 1
 
             self._decrement(rank, color)
 

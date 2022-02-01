@@ -16,7 +16,8 @@ class Agent:
         self.name = name
         self._game_state = GameState(players_names, name, data)
         self.turn = 0
-        np.random.seed(SEED)
+        if SEED is not None:
+            np.random.seed(SEED)
 
     def make_move(self) -> GameData.ClientToServerData:
         """ """
@@ -107,7 +108,7 @@ class Agent:
         self._game_state.card_correctly_played(color_str2enum[card.color])
 
     def update_knowledge_on_hint(
-        self, hint_type: str, hint_value: int, cards_idx: list[int], destination: str
+        self, hint_type: str, hint_value: int, cards_idx: List[int], destination: str
     ) -> None:
         """ """
         value = hint_value if hint_type == "value" else color_str2enum[hint_value]
