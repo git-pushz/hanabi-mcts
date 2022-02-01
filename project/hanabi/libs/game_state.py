@@ -5,6 +5,7 @@ from typing import List, Tuple
 
 import GameData
 from constants import SEED
+import game
 
 colors = ["red", "yellow", "green", "blue", "white"]
 
@@ -52,6 +53,24 @@ class Card:
         self.color = color
         self.rank_known = False
         self.color_known = False
+        rank is not None and color is not None
+
+    def __eq__(self, other):
+        if type(other) is not Card and type(other) is not game.Card:
+            raise TypeError(f"Cannot compare type card with {type(other)}")
+        if hasattr(other, "rank"):
+            return self.rank == other.rank and self.color == color_str2enum[other.color]
+        elif hasattr(other, "value"):
+            return (
+                self.rank == other.value and self.color == color_str2enum[other.color]
+            )
+        else:
+            raise AttributeError(
+                f"Object {other} doesn't have attribute rank nor value."
+            )
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
     def reveal_rank(self, rank=None):
         if rank is not None:
@@ -71,15 +90,18 @@ class Card:
 
 class Deck:
     def __init__(self) -> None:
-        np.random.seed(SEED)
         col = np.array(CARD_QUANTITIES)
         col = col.reshape(col.size, 1)
         self._table = np.tile(col, len(colors))
+        self._reserved_ranks = np.zeros(len(CARD_QUANTITIES), dtype=np.int8)
+        self._reserved_colors = np.zeros(len(Color), dtype=np.int8)
 
     def __deepcopy__(self, memo={}):
         cls = self.__class__
         result = cls.__new__(cls)
         result._table = np.copy(self._table)
+        result._reserved_ranks = np.copy(self._reserved_ranks)
+        result._reserved_colors = np.copy(self._reserved_colors)
         return result
 
     def __len__(self):
@@ -90,7 +112,7 @@ class Deck:
 
     def __getitem__(self, item):
         if type(item) is tuple:
-            return self._table[item[0], item[1]]
+            return self._table[item[0] - 1, item[1]]
         else:
             raise IndexError
 
@@ -110,23 +132,129 @@ class Deck:
         for card in cards:
             self._decrement(card.rank, card.color)
 
-    def add_cards(self, cards: List[Card]) -> None:
+    def add_cards(self, cards: List[Card], redeterminizing=False) -> None:
+        # reset reservations
+        if redeterminizing:
+            assert np.all(
+                self._reserved_colors == 0
+            ), "Color reservation not reset correctly"
+            assert np.all(
+                self._reserved_ranks == 0
+            ), "Rank reservation not reset correctly"
         for card in cards:
-            self._increment(card.rank, card.color)
+            if not redeterminizing or not card.is_fully_determined():
+                self._increment(card.rank, card.color)
+            # redeterminizing and not fully determined determined card
+            if redeterminizing and not card.is_fully_determined():
+                if card.rank_known:
+                    self._reserved_ranks[card.rank - 1] += 1
+                elif card.color_known:
+                    self._reserved_colors[card.color] += 1
 
     def draw(self, rank: int = None, color: Color = None) -> Card:
         if rank is None and color is None:
-            rows, columns = np.nonzero(self._table)
-            pos = np.random.choice(rows.size)
-            rank = rows[pos] + 1
-            color = columns[pos]
-        elif color is None:
-            columns = np.nonzero(self._table[rank - 1, :])[0]
-            color = np.random.choice(columns)
-        elif rank is None:
-            rows = np.nonzero(self._table[:, color])[0]
-            rank = np.random.choice(rows) + 1
+            # rows, columns = np.nonzero(self._table)
+            # pos = np.random.choice(rows.size)
+            # rank = rows[pos] + 1
+            # color = columns[pos]
+            possibilities = [
+                (r, c)
+                for r in range(len(CARD_QUANTITIES))
+                for c in range(len(Color))
+                for _ in range(self._table[r][c])
+            ]
+            rank, color = np.random.choice(possibilities)
+            rank += 1
+        elif rank is not None:
+            # rows = np.nonzero(self._table[:, color])[0]
+            # rank = np.random.choice(rows) + 1
+            possibilities = [
+                c for c in range(len(Color)) for _ in range(self._table[rank - 1][c])
+            ]
+            color = np.random.choice(possibilities)
+            assert color is not None
+        elif color is not None:
+            # columns = np.nonzero(self._table[rank - 1, :])[0]
+            # color = np.random.choice(columns)
+            possibilities = [
+                r
+                for r in range(len(CARD_QUANTITIES))
+                for _ in range(self._table[r][color])
+            ]
+            rank = np.random.choice(possibilities) + 1
+            assert rank is not None
         self._decrement(rank, color)
+        return Card(rank, color)
+
+    def draw2(self, rank: int = None, color: Color = None) -> Card:
+        # OBS: if rank or color are not None, for sure we are redeterminizing
+
+        # not fully determined
+        if rank is None or color is None:
+
+            table = np.copy(self._table)
+
+            update_table = True
+            iteration = 0
+            max_iterations = 1000
+
+            while update_table:
+                update_table = False
+
+                iteration += 1
+                if iteration > max_iterations:
+                    print(f"Rank: {rank}")
+                    print(f"Color: {color}")
+                    print(table)
+                    raise RuntimeError("Stuck in draw2")
+
+                if rank is None:
+                    # if no rank is specified, do not pick any rank-reserved card
+                    r_idx = np.sum(table, axis=1) <= self._reserved_ranks
+                    table[r_idx, :] = 0
+                    update_table = np.any(r_idx)
+
+                if color is None:
+                    # if no color is specified, do not pick any rank-reserved card
+                    c_idx = np.sum(table, axis=0) <= self._reserved_colors
+                    table[:, c_idx] = 0
+                    update_table = update_table or np.any(c_idx)
+
+            # completely unknown
+            if rank is None and color is None:
+                possibilities = [
+                    coordinates
+                    for coordinates, occurrencies in np.ndenumerate(table)
+                    for _ in range(occurrencies)
+                ]
+                rank, color = np.random.choice(possibilities)
+                rank += 1
+
+            # known rank
+            elif rank is not None:
+                assert (
+                    self._reserved_ranks[rank - 1] > 0
+                ), f"No card with rank{rank} was previously reserved"
+                self._reserved_ranks[rank - 1] -= 1
+                possibilities = [
+                    c for c in range(table.shape[1]) for _ in range(table[rank - 1][c])
+                ]
+                color = np.random.choice(possibilities)
+
+            # known color
+            elif color is not None:
+                assert (
+                    self._reserved_colors[color] > 0
+                ), f"No card with color {color} was previously reserved"
+                self._reserved_colors[color] -= 1
+                possibilities = [
+                    r for r in range(table.shape[0]) for _ in range(table[r][color])
+                ]
+                rank = np.random.choice(possibilities) + 1
+
+            self._decrement(rank, color)
+
+        assert rank is not None and color is not None
         return Card(rank, color)
 
     def is_empty(self) -> bool:
@@ -141,6 +269,14 @@ class Trash:
         col = col.reshape(col.size, 1)
         self._table = np.tile(col, len(colors))
 
+    def __deepcopy__(self, memo={}):
+        cls = self.__class__
+        result = cls.__new__(cls)
+        result._table = np.copy(self._table)
+        result.maxima = copy.copy(self.maxima)
+        result.list = copy.deepcopy(self.list)
+        return result
+
     def _decrement(self, rank: int, color: Color) -> None:
         assert (
             self._table[rank - 1][color] > 0
@@ -152,6 +288,9 @@ class Trash:
     def append(self, card: Card) -> None:
         self.list.append(card)
         self._decrement(card.rank, card.color)
+
+    def get_table(self):
+        return self._table
 
 
 class GameState:
@@ -248,9 +387,10 @@ class GameState:
 
     def append_card_to_player_hand(self, player: str, card: Card):
         """ """
-        # player is never self.root_player
         self.hands[player].append(card)
-        self.deck.remove_cards([card])
+        if card.rank is not None and card.color is not None:
+            assert player != self.root_player
+            self.deck.remove_cards([card])
 
     def give_hint(
         self, cards_idx: List[int], destination: str, hint_type: str, hint_value: int
@@ -262,6 +402,8 @@ class GameState:
                 hand[idx].reveal_rank(hint_value)
             elif hint_type == "color":
                 hand[idx].reveal_color(hint_value)
+            if destination == self.root_player and hand[idx].is_fully_determined():
+                self.deck.remove_cards([hand[idx]])
         self.hints += 1
 
     def discover_card_root(self, rank: int, color: Color, card_idx: int) -> None:
@@ -284,6 +426,7 @@ class GameState:
     def use_hint(self) -> None:
         """ """
         if self.hints == MAX_HINTS:
+            # TODO: check this
             raise RuntimeError("Trying to use more token hints than allowed")
         self.hints += 1
 
@@ -333,7 +476,11 @@ class MCTSState(GameState):
         for idx, card in enumerate(root_hand):
             if not card.is_fully_determined():
                 assert card.rank is None or card.color is None
-                root_hand[idx] = self.deck.draw(rank=card.rank, color=card.color)
+                new_card = self.deck.draw(rank=card.rank, color=card.color)
+                assert new_card.rank is not None and new_card.color is not None
+                new_card.rank_known = card.rank_known
+                new_card.color_known = card.color_known
+                root_hand[idx] = new_card
 
     # MCTS
     def play_card(self, player: str, card_idx: int) -> None:
@@ -396,11 +543,20 @@ class MCTSState(GameState):
         hand = self.hands[player_name]
         if player_name == self.root_player:
             raise RuntimeError("Cannot re-determinize root player's hand")
-        self.deck.add_cards(hand)
+        self.deck.add_cards(hand, redeterminizing=True)
+
+        # for idx, card in enumerate(hand):
+        #     rank = card.rank if card.rank_known else None
+        #     color = card.color if card.color_known else None
+        #     new_card = self.deck.draw(rank=rank, color=color)
+        #     new_card.rank_known = card.rank_known
+        #     new_card.color_known = card.color_known
+        #     hand[idx] = new_card
+
         for idx, card in enumerate(hand):
             rank = card.rank if card.rank_known else None
             color = card.color if card.color_known else None
-            new_card = self.deck.draw(rank=rank, color=color)
+            new_card = self.deck.draw2(rank=rank, color=color)
             new_card.rank_known = card.rank_known
             new_card.color_known = card.color_known
             hand[idx] = new_card
@@ -416,8 +572,11 @@ class MCTSState(GameState):
             saved_hand: the hand to restore
         """
         self.deck.add_cards(self.hands[player_name])  # put cards back in deck
+        self.hands[player_name] = []
         self._remove_illegal_cards(saved_hand)  # remove inconsistencies
-        self.deck.remove_cards(saved_hand)  # pick cards from deck
+        self.deck.remove_cards(
+            filter(lambda card: card is not None, saved_hand)
+        )  # pick cards from deck
         self._determinize_empty_slots(saved_hand)
         self.hands[player_name] = saved_hand
 
@@ -447,8 +606,8 @@ class MCTSState(GameState):
             locations += self.hands[p]
 
         for idx, card in enumerate(cards):
-            if card is None:
-                continue
+            # if card is None:
+            #     continue
             quantity = 1 + self.deck[card.rank, card.color]  # 1 is for "card" itself
             for c in locations:
                 if c.rank == card.rank and c.color == card.color:
@@ -459,6 +618,29 @@ class MCTSState(GameState):
                 # TODO: idx not ok for index
                 cards[idx] = None
 
+    def assert_consistency(self):
+        col = np.array(CARD_QUANTITIES)
+        col = col.reshape(col.size, 1)
+        full_table = np.tile(col, len(colors))
+        table = np.copy(self.deck[:, :])
+
+        # trash
+        trash_table = full_table - self.trash.get_table()
+        table += trash_table
+
+        # hands
+        for player in self.players:
+            for card in self.hands[player]:
+                table[card.rank - 1][card.color] += 1
+
+        # board
+        for c_idx, tos in enumerate(self.board):
+            for i in range(tos):
+                table[i][c_idx] += 1
+
+        assert np.all(table == full_table), "Consistency failed"
+
 
 ### TODO
 # * Gestire ultimo giro di giocate dopo che il mazzo e' finito
+# * to_string per la classe Tree

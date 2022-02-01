@@ -1,5 +1,7 @@
 from typing import List
 
+import numpy as np
+from constants import SEED
 from game_state import GameState, Card, color_enum2str, color_str2enum
 from mcts import MCTS
 import GameData
@@ -13,15 +15,23 @@ class Agent:
     def __init__(self, name: str, data: GameData.ServerGameStateData, players_names: list):
         self.name = name
         self._game_state = GameState(players_names, name, data)
+        self.turn = 0
+        np.random.seed(SEED)
 
     def make_move(self) -> GameData.ClientToServerData:
-        """
-        """
+        """ """
+        self.turn += 1
         mcts = MCTS(self._game_state, self.name)
-        move = mcts.run_search(100)
+        move = mcts.run_search(50)
         if move.action_type == "hint":
-            hint_value = move.hint_value if move.hint_type == "value" else color_enum2str[move.hint_value]
-            return GameData.ClientHintData(self.name, move.destination, move.hint_type, hint_value)
+            hint_value = (
+                move.hint_value
+                if move.hint_type == "value"
+                else color_enum2str[move.hint_value]
+            )
+            return GameData.ClientHintData(
+                self.name, move.destination, move.hint_type, hint_value
+            )
         elif move.action_type == "play":
             return GameData.ClientPlayerPlayCardRequest(self.name, move.card_idx)
         elif move.action_type == "discard":
@@ -47,7 +57,12 @@ class Agent:
 
         assert player != self.name, "Cannot discover my cards"
         # TODO: for the agent, a card with (None, None) should be appended?
-        self._game_state.append_card_to_player_hand(player, Card(new_card.value, color_str2enum[new_card.color]))
+        self._game_state.append_card_to_player_hand(
+            player, Card(new_card.value, color_str2enum[new_card.color])
+        )
+
+    def draw_unknown_card(self) -> None:
+        self._game_state.append_card_to_player_hand(self.name, Card(None, None))
 
     def track_played_card(self, player: str, card_idx: int) -> None:
         """
@@ -55,9 +70,10 @@ class Agent:
         self._game_state.remove_card_from_hand(player, card_idx)
 
     def update_trash(self, card) -> None:
-        """
-        """
-        self._game_state.update_trash(Card(rank=card.value, color=color_str2enum[card.color]))
+        """ """
+        self._game_state.update_trash(
+            Card(rank=card.value, color=color_str2enum[card.color])
+        )
 
     def hint_gained(self) -> None:
         """
@@ -90,7 +106,21 @@ class Agent:
         """
         self._game_state.card_correctly_played(color_str2enum[card.color])
 
-    def assert_aligned_with_server(self, hints_used: int, mistakes_made: int, board: list, trash: list, players: list) -> None:
+    def update_knowledge_on_hint(
+        self, hint_type: str, hint_value: int, cards_idx: list[int], destination: str
+    ) -> None:
+        """ """
+        value = hint_value if hint_type == "value" else color_str2enum[hint_value]
+        self._game_state.give_hint(cards_idx, destination, hint_type, value)
+
+    def assert_aligned_with_server(
+        self,
+        hints_used: int,
+        mistakes_made: int,
+        board: list,
+        trash: list,
+        players: list,
+    ) -> None:
         """
         FOR DEBUG ONLY: assert that every internal structure is consistent with the server knowledge
         Args:
@@ -100,16 +130,35 @@ class Agent:
             trash: the list of actually discarded cards
             players: the list of objects of class Player - they also store their hands
         """
-        assert self._game_state.hints == hints_used, "wrong count of hints"
+        # assert self._game_state.hints == hints_used, "wrong count of hints"
         assert self._game_state.errors == mistakes_made, "wrong count of errors"
-        # b = [max(v) if len(v) > 0 else 0 for _, v in board.items()]
-        # assert self.board == b, f"wrong board: self.board: {self.board}, board: {board}"
-        # assert self._game_state.trash == trash, " wrong trash"
-        for player in players:
-            assert player.hand == self._game_state.hands[player.name], f"player {player.name} wrong hand"
 
-    def update_knowledge_on_hint(self, hint_type: str, hint_value: int, cards_idx: List[int], destination: str) -> None:
-        """
-        """
-        value = hint_value if hint_type == "value" else color_str2enum[hint_value]
-        self._game_state.give_hint(cards_idx, destination, hint_type, value)
+        # TODO: remove
+        self._game_state.hints = hints_used
+
+        # Board
+        b = [len(cards) for cards in board.values()]
+        assert (
+            self._game_state.board == b
+        ), f"wrong board: self.board: {self._game_state.board}, board: {b}"
+
+        # Trash
+        client_trash = self._game_state.trash.list
+        assert len(client_trash) == len(trash)
+        for idx in range(len(trash)):
+            assert (
+                trash[idx].value == client_trash[idx].rank
+            ), f"Mismatch between cards value in trash (idx={idx})"
+            assert (
+                color_str2enum[trash[idx].color] == client_trash[idx].color
+            ), f"Mismatch between cards color in trash (idx={idx})"
+
+        # Hands
+        for player in players:
+            if player.name != self.name:
+                client_hand = self._game_state.hands[player.name]
+                assert len(player.hand) == len(client_hand)
+                for idx in range(len(player.hand)):
+                    assert (
+                        client_hand[idx] == player.hand[idx]
+                    ), f"player {player.name} wrong card in hand at idx {idx}"

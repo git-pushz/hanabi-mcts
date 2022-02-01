@@ -107,7 +107,6 @@ class GameMove:
 
 class Model:
     def __init__(self, mcts_state: MCTSState) -> None:
-        np.random.seed(SEED)
         self.state = mcts_state
         self._saved_hand = None
 
@@ -154,7 +153,9 @@ class Model:
 
         hand = self.state.hands[this_player]
         for idx, card in enumerate(hand):
-            actions = ["play"]
+            actions = []
+            if card.rank_known:
+                actions.append("play")
             if self.state.hints > 0:
                 actions.append("discard")
             for action in actions:

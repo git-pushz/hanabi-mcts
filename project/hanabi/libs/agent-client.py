@@ -36,7 +36,6 @@ def main():
         if status == statuses[1]:
             s.send(GameData.ClientGetGameStateRequest(agent_name).serialize())
 
-
     def agent_move_thread():
         with cv:
             while run:
@@ -51,7 +50,7 @@ def main():
                     move = agent.make_move()
                     if move is not None:
                         if True:
-                            print(f"I chose the move {move.action}:")
+                            print(f"At turn {agent.turn} I chose the move: {move.action}:")
                             if hasattr(move, 'handCardOrdered'):
                                 print(f"\tCard: {move.handCardOrdered}")
                             if hasattr(move, 'type') and hasattr(move, 'value'):
@@ -122,7 +121,7 @@ def main():
                     agent = Agent(agent_name, data, players)
                 else:
                     agent.track_drawn_card(data.players)
-                # agent.assert_aligned_with_server(data.usedNoteTokens, data.usedStormTokens, data.tableCards, data.discardPile, data.players)
+                agent.assert_aligned_with_server(data.usedNoteTokens, data.usedStormTokens, data.tableCards, data.discardPile, data.players)
                 check_agent_turn(data.currentPlayer)
 
             # 4 received when someone performs an invalid action
@@ -149,6 +148,8 @@ def main():
 
                 if data.lastPlayer == agent_name:
                     agent.discover_card(data.card, data.cardHandIndex, 'discard')
+                    agent.track_played_card(data.lastPlayer, data.cardHandIndex)
+                    agent.draw_unknown_card()
                     print("Current player: " + data.player)
                     # possibly notify the condition variable
                     check_agent_turn(data.player)
@@ -166,6 +167,8 @@ def main():
 
                 if data.lastPlayer == agent_name:
                     agent.discover_card(data.card, data.cardHandIndex, 'play')
+                    agent.track_played_card(data.lastPlayer, data.cardHandIndex)
+                    agent.draw_unknown_card()
                     print("Current player: " + data.player)
                     # possibly notify the condition variable
                     check_agent_turn(data.player)
@@ -184,6 +187,8 @@ def main():
 
                 if data.lastPlayer == agent_name:
                     agent.discover_card(data.card, data.cardHandIndex, 'mistake')
+                    agent.track_played_card(data.lastPlayer, data.cardHandIndex)
+                    agent.draw_unknown_card()
                     print("Current player: " + data.player)
                     # possibly notify the condition variable
                     check_agent_turn(data.player)
