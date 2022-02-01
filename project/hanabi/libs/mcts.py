@@ -85,10 +85,9 @@ class MCTS:
         """
         return True if there is no more moves playable at a certain level that has not been tried yet
         """
-        # this function needs to be changed for the hanabi case
         return len(self._get_available_plays(node, model)) == 0
 
-    def _get_available_plays(self, node: Node, model) -> list[GameMove]:
+    def _get_available_plays(self, node: Node, model: Model) -> list[GameMove]:
         children = self.tree.get_children(node)
         player = model.state.get_next_player_name(node.data.move.player)
         # return only valid moves which haven't been already tried in children
@@ -105,6 +104,13 @@ class MCTS:
         # model.check_win should check if the match is over, not if it is won (see simulation and backpropagation function)
         if not model.check_ended()[0]:
             legal_moves = self._get_available_plays(node, model)
+            #####
+            if len(legal_moves) == 0:
+                player = model.state.get_next_player_name(node.data.move.player)
+                hand = model.state.hands[player]
+                for idx in range(len(hand)):
+                    legal_moves.append(GameMove(player, "play", card_idx=idx))
+            #####
             random_move = random.choice(legal_moves)
             model.make_move(random_move)
             expanded_node = Node(GameNode(random_move))
