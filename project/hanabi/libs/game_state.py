@@ -196,7 +196,7 @@ class Deck:
 
             update_table = True
             iteration = 0
-            max_iterations = 1000
+            max_iterations = 100
 
             while update_table:
                 update_table = False
@@ -206,13 +206,13 @@ class Deck:
                 if rank is None:
                     # if no rank is specified, do not pick any rank-reserved card
                     r_idx = np.sum(table, axis=1) <= self._reserved_ranks
-                    table[r_idx][:] = 0
+                    table[r_idx, :] = 0
                     update_table = np.any(r_idx)
 
                 if color is None:
                     # if no color is specified, do not pick any rank-reserved card
                     c_idx = np.sum(table, axis=0) <= self._reserved_colors
-                    table[:][c_idx] = 0
+                    table[:, c_idx] = 0
                     update_table = update_table or np.any(c_idx)
 
             # completely unknown
