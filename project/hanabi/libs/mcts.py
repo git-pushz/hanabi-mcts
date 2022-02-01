@@ -1,10 +1,10 @@
 import copy
 from model import Model, GameMove
 from game_state import GameState, MCTSState
-from constants import SEED
 from tree import Tree, Node, GameNode
 from functools import reduce
 import numpy as np
+import random
 
 DEBUG = False
 SIMULATIONS_NUMBER = 50
@@ -105,7 +105,7 @@ class MCTS:
         # model.check_win should check if the match is over, not if it is won (see simulation and backpropagation function)
         if not model.check_ended()[0]:
             legal_moves = self._get_available_plays(node, model)
-            random_move = np.random.choice(legal_moves)
+            random_move = random.choice(legal_moves)
             model.make_move(random_move)
             expanded_node = Node(GameNode(random_move))
             self.tree.insert(expanded_node, node)

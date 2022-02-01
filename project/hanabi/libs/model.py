@@ -106,6 +106,7 @@ class Model:
     def __init__(self, mcts_state: MCTSState) -> None:
         self.state = mcts_state
         self._saved_hand = None
+        self.state.assert_consistency()
 
     def __deepcopy__(self, memo={}):
         cls = self.__class__
@@ -125,6 +126,7 @@ class Model:
             # TODO deepcopy
             self._saved_hand = copy.copy(self.state.hands[player])
             self.state.redeterminize_hand(player)
+        self.state.assert_consistency()
 
     def exit_node(self, player: str) -> None:
         """
@@ -136,6 +138,7 @@ class Model:
         if player != self.state.root_player and self._saved_hand is not None:
             self.state.restore_hand(player, self._saved_hand)
             self._saved_hand = None
+        self.state.assert_consistency()
 
     def valid_moves(self, this_player: str) -> list[GameMove]:
         """

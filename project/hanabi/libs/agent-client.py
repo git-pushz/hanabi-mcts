@@ -42,6 +42,7 @@ def main():
                 if DEBUG or VERBOSE:
                     print("waiting on cv")
                 cv.wait()  # wait for our turn
+                print(agent.known_status())
                 if not run:
                     break
                 if DEBUG or VERBOSE:
@@ -50,18 +51,26 @@ def main():
                     move = agent.make_move()
                     if move is not None:
                         if True:
-                            print(f"At turn {agent.turn} I chose the move: {move.action}:")
-                            if hasattr(move, 'handCardOrdered'):
+                            print(
+                                f"At turn {agent.turn} I chose the move: {move.action}:"
+                            )
+                            if hasattr(move, "handCardOrdered"):
                                 print(f"\tCard: {move.handCardOrdered}")
-                            if hasattr(move, 'type') and hasattr(move, 'value'):
-                                print(f"\tHint: {move.type} {move.value} to {move.destination}")
+                            if hasattr(move, "type") and hasattr(move, "value"):
+                                print(
+                                    f"\tHint: {move.type} {move.value} to {move.destination}"
+                                )
                         if LOG:
-                            with open(agent.FILE, 'a') as f:
-                                f.write(f"At turn {agent.turn} I chose the move {move.action}:\n")
-                                if hasattr(move, 'handCardOrdered'):
+                            with open(agent.FILE, "a") as f:
+                                f.write(
+                                    f"At turn {agent.turn} I chose the move {move.action}:\n"
+                                )
+                                if hasattr(move, "handCardOrdered"):
                                     f.write(f"\tCard: {move.handCardOrdered}\n")
-                                if hasattr(move, 'type') and hasattr(move, 'value'):
-                                    f.write(f"\tHint: {move.type} {move.value} to {move.destination}\n")
+                                if hasattr(move, "type") and hasattr(move, "value"):
+                                    f.write(
+                                        f"\tHint: {move.type} {move.value} to {move.destination}\n"
+                                    )
                     elif move is None:
                         print("MOVE IS NONE")
                     s.send(move.serialize())
@@ -98,7 +107,13 @@ def main():
             if type(data) is GameData.ServerPlayerStartRequestAccepted:
                 dataOk = True
                 if DEBUG:
-                    print("Ready: " + str(data.acceptedStartRequests) + "/" + str(data.connectedPlayers) + " players")
+                    print(
+                        "Ready: "
+                        + str(data.acceptedStartRequests)
+                        + "/"
+                        + str(data.connectedPlayers)
+                        + " players"
+                    )
                 # data = s.recv(DATASIZE)
                 # data = GameData.GameData.deserialize(data)
 
@@ -121,7 +136,13 @@ def main():
                     agent = Agent(agent_name, data, players)
                 else:
                     agent.track_drawn_card(data.players)
-                agent.assert_aligned_with_server(data.usedNoteTokens, data.usedStormTokens, data.tableCards, data.discardPile, data.players)
+                agent.assert_aligned_with_server(
+                    data.usedNoteTokens,
+                    data.usedStormTokens,
+                    data.tableCards,
+                    data.discardPile,
+                    data.players,
+                )
                 check_agent_turn(data.currentPlayer)
 
             # 4 received when someone performs an invalid action
@@ -134,7 +155,7 @@ def main():
                 run = False
                 # decrement turn because this notify will make the agent take another decision (in the current turn)
                 # in the make_move, which by default increments the turns count
-                # agent.turn -= 1
+                agent.turn -= 1
                 with cv:
                     cv.notify()
 
@@ -143,119 +164,80 @@ def main():
                 dataOk = True
                 print("Action valid!")
 
-                agent.update_trash(data.card)
-                agent.hint_gained()
+                if data.lastPlayer == agent_name:
+                    agent.discover_own_card(data.card, data.cardHandIndex, "discard")
+
+                agent.track_discarded_card(data.lastPlayer, data.cardHandIndex)
 
                 if data.lastPlayer == agent_name:
-                    agent.discover_card(data.card, data.cardHandIndex, 'discard')
-                    agent.track_played_card(data.lastPlayer, data.cardHandIndex)
-                    agent.draw_unknown_card()
+                    agent.draw_card()
                     print("Current player: " + data.player)
                     # possibly notify the condition variable
                     check_agent_turn(data.player)
                 else:
-                    agent.track_played_card(data.lastPlayer, data.cardHandIndex)
                     if data.handLength == 5:
-                        show_action()
+                        show_action()  # this will trigger a check for the new drawn card
 
             # 6 received when one player plays a card correctly
             if type(data) is GameData.ServerPlayerMoveOk:
                 dataOk = True
                 print("Nice move!")
 
-                agent.update_board(data.card)
+                if data.lastPlayer == agent_name:
+                    agent.discover_own_card(data.card, data.cardHandIndex, "play")
+
+                agent.track_played_card(
+                    data.lastPlayer, data.cardHandIndex, correctly=True
+                )
 
                 if data.lastPlayer == agent_name:
-                    agent.discover_card(data.card, data.cardHandIndex, 'play')
-                    agent.track_played_card(data.lastPlayer, data.cardHandIndex)
-                    agent.draw_unknown_card()
+                    agent.draw_card()
                     print("Current player: " + data.player)
                     # possibly notify the condition variable
                     check_agent_turn(data.player)
                 else:
-                    agent.track_played_card(data.lastPlayer, data.cardHandIndex)
                     if data.handLength == 5:
-                        show_action()
+                        show_action()  # this will trigger a check for the new drawn card
 
             # 7 received when one player makes a mistake
             if type(data) is GameData.ServerPlayerThunderStrike:
                 dataOk = True
                 print("OH NO! The Gods are unhappy with you!")
 
-                agent.update_trash(data.card)
-                agent.mistake_made()
+                if data.lastPlayer == agent_name:
+                    agent.discover_own_card(data.card, data.cardHandIndex, "mistake")
+
+                agent.track_played_card(
+                    data.lastPlayer, data.cardHandIndex, correctly=False
+                )
 
                 if data.lastPlayer == agent_name:
-                    agent.discover_card(data.card, data.cardHandIndex, 'mistake')
-                    agent.track_played_card(data.lastPlayer, data.cardHandIndex)
-                    agent.draw_unknown_card()
+                    agent.draw_card()
                     print("Current player: " + data.player)
                     # possibly notify the condition variable
                     check_agent_turn(data.player)
                 else:
-                    agent.track_played_card(data.lastPlayer, data.cardHandIndex)
                     if data.handLength == 5:
-                        show_action()
-
-            # 8 received when one player hints another player
-            # if type(data) is GameData.ServerHintData:
-            #     dataOk = True
-            #     print("Hint type: " + data.type)
-            #     print("Player " + data.destination + " cards with value " + str(data.value) + " are:")
-            #     for i in data.positions:
-            #         print("\t" + str(i))
-            #     agent.update_knowledge_on_hint_received(data)
-            #     if data.destination == agent.name:
-            #         hint_received = True
-            #         show_action()
-            #
-            #     #########################
-            #     # TODO
-            #     # * decrementare valore carte nella mano dell'agent quando una è FD tranne la carta FD:
-            #     #        -> agent.py, line 135
-            #     # * fare in modo che una carta FD faccia scattare l'aggiornamento più di una volta (attributi di classe fully_determined):
-            #     #       -> function get_new_fully_determined_cards()
-            #     #       -> function reset_recent_fully_determined_cards()
-            #     #########################
-            #
-            #     # check if after THIS hint to agent the following update generated fully determined cards in agent's hand
-            #     if data.destination == agent.name:
-            #         # retrieve recent fully determined cards
-            #         fd_cards = agent.knowledge.player_mental_state(agent.name).get_new_fully_determined_cards()
-            #         # fd_cards is a list of card indexes in agent's hand which have been detected Fully Determined recently
-            #         print('fully determined cards generated with last hint in agent"s hand:\n')
-            #         print(fd_cards)
-            #
-            #         if (len(fd_cards) != 0):
-            #             # if agent has recent Fully Determined cards...
-            #             for card_index in fd_cards:
-            #                 # ...for each one get the rank and the color of it
-            #                 print("Risultato get_card_from_index:\n")
-            #                 print(agent.knowledge.player_mental_state(agent.name).get_card_from_index(card_index))
-            #                 rank, color = np.nonzero(
-            #                     agent.knowledge.player_mental_state(agent.name).get_card_from_index(
-            #                         card_index).get_table())
-            #                 print("Rank and Color of the FD card: ", rank, color)
-            #                 # update mental state of each player (including agent)
-            #                 for player in agent.players:
-            #                     agent.knowledge.player_mental_state(player).update_whole_hand(rank, color,
-            #                                                                                   fully_determined=True)
-            #             # now recent fully determined cards are not recent anymore...
-            #             agent.knowledge.player_mental_state(agent.name).reset_recent_fully_determined_cards()
-            #
-            #     show_action()
+                        show_action()  # this will trigger a check for the new drawn card
 
             # 8 received when one player hints another player
             if type(data) is GameData.ServerHintData:
                 dataOk = True
                 if DEBUG:
                     print("Hint type: " + data.type)
-                    print("Player " + data.destination + " cards with value " + str(data.value) + " are:")
+                    print(
+                        "Player "
+                        + data.destination
+                        + " cards with value "
+                        + str(data.value)
+                        + " are:"
+                    )
                     for i in data.positions:
                         print("\t" + str(i))
 
-                agent.hint_consumed()
-                agent.update_knowledge_on_hint(data.type, data.value, data.positions, data.destination)
+                agent.track_hint(
+                    data.destination, data.positions, data.type, data.value
+                )
 
                 check_agent_turn(data.player)
 
@@ -289,5 +271,5 @@ def main():
             stdout.flush()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

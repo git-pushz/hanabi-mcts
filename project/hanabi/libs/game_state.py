@@ -1,296 +1,23 @@
 import copy
-from enum import IntEnum
 import numpy as np
-import random
-from itertools import product
 import GameData
-from constants import SEED
-import game
+from utils import (
+    CARD_QUANTITIES,
+    color_str2enum,
+    Color,
+    Card,
+    Deck,
+    Trash,
+)
 
-colors = ["red", "yellow", "green", "blue", "white"]
-
-
-class Color(IntEnum):
-    RED = 0
-    YELLOW = 1
-    GREEN = 2
-    BLUE = 3
-    WHITE = 4
-
-
-color_str2enum = {
-    "red": Color.RED,
-    "yellow": Color.YELLOW,
-    "green": Color.GREEN,
-    "blue": Color.BLUE,
-    "white": Color.WHITE,
-}
-
-color_enum2str = {
-    Color.RED: "red",
-    Color.YELLOW: "yellow",
-    Color.GREEN: "green",
-    Color.BLUE: "blue",
-    Color.WHITE: "white",
-}
-
-HAND_SIZE = 5
-CARD_QUANTITIES = [3, 2, 2, 2, 1]
 MAX_HINTS = 8
 MAX_ERRORS = 3
-
+HAND_SIZE = 5
 
 ### WARNING ###
 # When a player will compute the rules the decide the next move, he will have to
 # add his hand back into the deck before performing any inference.
 # When the computation is done, he will have to remove the cards from the deck again
-
-
-class Card:
-    def __init__(self, rank: int, color: Color) -> None:
-        # id ?
-        self.rank = rank
-        self.color = color
-        self.rank_known = False
-        self.color_known = False
-        rank is not None and color is not None
-
-    def __eq__(self, other):
-        if type(other) is not Card and type(other) is not game.Card:
-            raise TypeError(f"Cannot compare type card with {type(other)}")
-        if hasattr(other, "rank"):
-            return self.rank == other.rank and self.color == color_str2enum[other.color]
-        elif hasattr(other, "value"):
-            return (
-                self.rank == other.value and self.color == color_str2enum[other.color]
-            )
-        else:
-            raise AttributeError(
-                f"Object {other} doesn't have attribute rank nor value."
-            )
-
-    def __ne__(self, other):
-        return not self.__eq__(other)
-
-    def reveal_rank(self, rank=None):
-        if rank is not None:
-            # assert self.rank is None
-            self.rank = rank
-        self.rank_known = True
-
-    def reveal_color(self, color=None):
-        if color is not None:
-            # assert self.color is None
-            self.color = color
-        self.color_known = True
-
-    def is_fully_determined(self):
-        return self.rank_known and self.color_known
-
-
-class Deck:
-    def __init__(self) -> None:
-        col = np.array(CARD_QUANTITIES)
-        col = col.reshape(col.size, 1)
-        self._table = np.tile(col, len(colors))
-        self._reserved_ranks = np.zeros(len(CARD_QUANTITIES), dtype=np.int8)
-        self._reserved_colors = np.zeros(len(Color), dtype=np.int8)
-
-    def __deepcopy__(self, memo={}):
-        cls = self.__class__
-        result = cls.__new__(cls)
-        result._table = np.copy(self._table)
-        result._reserved_ranks = np.copy(self._reserved_ranks)
-        result._reserved_colors = np.copy(self._reserved_colors)
-        return result
-
-    def __len__(self):
-        """
-        Return the number of cards still available in the deck
-        """
-        return np.sum(self._table)
-
-    def __getitem__(self, item):
-        if type(item) is tuple:
-            return self._table[item[0] - 1, item[1]]
-        else:
-            raise IndexError
-
-    def _decrement(self, rank: int, color: Color) -> None:
-        assert (
-            self._table[rank - 1][color] > 0
-        ), "trying to decrement zero value from Deck"
-        self._table[rank - 1][color] -= 1
-
-    def _increment(self, rank: int, color: Color) -> None:
-        assert (
-            self._table[rank - 1][color] < CARD_QUANTITIES[rank - 1]
-        ), "trying to increment maximum value from Deck"
-        self._table[rank - 1][color] += 1
-
-    def remove_cards(self, cards: list[Card]) -> None:
-        for card in cards:
-            self._decrement(card.rank, card.color)
-
-    def add_cards(self, cards: list[Card], redeterminizing=False) -> None:
-        # reset reservations
-        if redeterminizing:
-            assert np.all(
-                self._reserved_colors == 0
-            ), "Color reservation not reset correctly"
-            assert np.all(
-                self._reserved_ranks == 0
-            ), "Rank reservation not reset correctly"
-        for card in cards:
-            if not redeterminizing or not card.is_fully_determined():
-                self._increment(card.rank, card.color)
-            # redeterminizing and not fully determined determined card
-            if redeterminizing and not card.is_fully_determined():
-                if card.rank_known:
-                    self._reserved_ranks[card.rank - 1] += 1
-                elif card.color_known:
-                    self._reserved_colors[card.color] += 1
-
-    def draw(self, rank: int = None, color: Color = None) -> Card:
-        if rank is None and color is None:
-            # rows, columns = np.nonzero(self._table)
-            # pos = np.random.choice(rows.size)
-            # rank = rows[pos] + 1
-            # color = columns[pos]
-            possibilities = [
-                (r, c)
-                for r in range(len(CARD_QUANTITIES))
-                for c in range(len(Color))
-                for _ in range(self._table[r][c])
-            ]
-            rank, color = random.choice(possibilities)
-            rank += 1
-        elif rank is not None:
-            # rows = np.nonzero(self._table[:, color])[0]
-            # rank = np.random.choice(rows) + 1
-            possibilities = [
-                c for c in range(len(Color)) for _ in range(self._table[rank - 1][c])
-            ]
-            color = random.choice(possibilities)
-            assert color is not None
-        elif color is not None:
-            # columns = np.nonzero(self._table[rank - 1, :])[0]
-            # color = np.random.choice(columns)
-            possibilities = [
-                r
-                for r in range(len(CARD_QUANTITIES))
-                for _ in range(self._table[r][color])
-            ]
-            rank = random.choice(possibilities) + 1
-            assert rank is not None
-        self._decrement(rank, color)
-        return Card(rank, color)
-
-    def draw2(self, rank: int = None, color: Color = None) -> Card:
-        # OBS: if rank or color are not None, for sure we are redeterminizing
-
-        # not fully determined
-        if rank is None or color is None:
-
-            table = np.copy(self._table)
-
-            update_table = True
-            iteration = 0
-            max_iterations = 1000
-
-            while update_table:
-                update_table = False
-
-                iteration += 1
-                if iteration > max_iterations:
-                    print(f"Rank: {rank}")
-                    print(f"Color: {color}")
-                    print(table)
-                    raise RuntimeError("Stuck in draw2")
-
-                if rank is None:
-                    # if no rank is specified, do not pick any rank-reserved card
-                    r_idx = np.sum(table, axis=1) <= self._reserved_ranks
-                    table[r_idx, :] = 0
-                    update_table = np.any(r_idx)
-
-                if color is None:
-                    # if no color is specified, do not pick any rank-reserved card
-                    c_idx = np.sum(table, axis=0) <= self._reserved_colors
-                    table[:, c_idx] = 0
-                    update_table = update_table or np.any(c_idx)
-
-            # completely unknown
-            if rank is None and color is None:
-                possibilities = [
-                    coordinates
-                    for coordinates, occurrencies in np.ndenumerate(table)
-                    for _ in range(occurrencies)
-                ]
-                rank, color = random.choice(possibilities)
-                rank += 1
-
-            # known rank
-            elif rank is not None:
-                assert (
-                    self._reserved_ranks[rank - 1] > 0
-                ), f"No card with rank{rank} was previously reserved"
-                self._reserved_ranks[rank - 1] -= 1
-                possibilities = [
-                    c for c in range(table.shape[1]) for _ in range(table[rank - 1][c])
-                ]
-                color = random.choice(possibilities)
-
-            # known color
-            elif color is not None:
-                assert (
-                    self._reserved_colors[color] > 0
-                ), f"No card with color {color} was previously reserved"
-                self._reserved_colors[color] -= 1
-                possibilities = [
-                    r for r in range(table.shape[0]) for _ in range(table[r][color])
-                ]
-                rank = random.choice(possibilities) + 1
-
-            self._decrement(rank, color)
-
-        assert rank is not None and color is not None
-        return Card(rank, color)
-
-    def is_empty(self) -> bool:
-        return not np.any(self._table != 0)
-
-
-class Trash:
-    def __init__(self) -> None:
-        self.list = []
-        self.maxima = [5] * 5
-        col = np.array(CARD_QUANTITIES)
-        col = col.reshape(col.size, 1)
-        self._table = np.tile(col, len(colors))
-
-    def __deepcopy__(self, memo={}):
-        cls = self.__class__
-        result = cls.__new__(cls)
-        result._table = np.copy(self._table)
-        result.maxima = copy.copy(self.maxima)
-        result.list = copy.deepcopy(self.list)
-        return result
-
-    def _decrement(self, rank: int, color: Color) -> None:
-        assert (
-            self._table[rank - 1][color] > 0
-        ), "trying to decrement zero value from Trash"
-        self._table[rank - 1][color] -= 1
-        if self._table[rank - 1][color] == 0:
-            self.maxima[color] = min(rank - 1, self.maxima[color])
-
-    def append(self, card: Card) -> None:
-        self.list.append(card)
-        self._decrement(card.rank, card.color)
-
-    def get_table(self):
-        return self._table
 
 
 class GameState:
@@ -381,67 +108,71 @@ class GameState:
         next_player_idx = (current_player_idx + 1) % len(self.players)
         return self.players[next_player_idx]
 
-    def remove_card_from_hand(self, player: str, card_idx: int) -> None:
-        """ """
-        del self.hands[player][card_idx]
-
-    def append_card_to_player_hand(self, player: str, card: Card):
-        """ """
-        self.hands[player].append(card)
-        if card.rank is not None and card.color is not None:
-            assert player != self.root_player
-            self.deck.remove_cards([card])
-
-    def give_hint(
-        self, cards_idx: list[int], destination: str, hint_type: str, hint_value: int
-    ) -> None:
-        """ """
-        hand = self.hands[destination]
-        for idx in cards_idx:
-            if hint_type == "value":
-                hand[idx].reveal_rank(hint_value)
-            elif hint_type == "color":
-                hand[idx].reveal_color(hint_value)
-            if destination == self.root_player and hand[idx].is_fully_determined():
-                self.deck.remove_cards([hand[idx]])
-        self.hints += 1
-
-    def discover_card_root(self, rank: int, color: Color, card_idx: int) -> None:
+    def root_card_discovered(self, card_idx: int, rank: int, color: Color) -> None:
         card = self.hands[self.root_player][card_idx]
         if not card.is_fully_determined():
             card.reveal_rank(rank)
             card.reveal_color(color)
             self.deck.remove_cards([card])
 
-    def update_trash(self, card: Card) -> None:
-        """ """
+    def card_discarded(self, player: str, card_idx: int) -> None:
+        """
+        Remove a card from the player's hand and put it in the trash.
+        The card must be fully specified, even for the root_player
+        """
+        card = self.hands[player].pop(card_idx)
+        assert card.rank is not None and card.color is not None
         self.trash.append(card)
-
-    def gain_hint(self) -> None:
-        """ """
-        if self.hints == 0:
-            raise RuntimeError(f"Trying to gain more than {MAX_HINTS} hint tokens.")
+        assert self.hints > 0
         self.hints -= 1
 
-    def use_hint(self) -> None:
+    def card_played(self, player: str, card_idx: int, correctly: bool) -> None:
+        """
+        Remove a card from the player's hand and put it in the trash.
+        The card must be fully specified, even for the root_player
+        """
+        card = self.hands[player].pop(card_idx)
+        assert card.rank is not None and card.color is not None
+        if correctly:
+            assert self.board[card.color] < self.trash.maxima[card.color]
+            assert card.rank == self.board[card.color] + 1
+            self.board[card.color] += 1
+            if card.rank == 5 and self.hints > 0:
+                self.hint -= 1
+        else:
+            self.trash.append(card)
+            if self.errors >= MAX_ERRORS:
+                raise RuntimeError("Max number of error tokens already reached")
+            self.errors += 1
+
+    def card_drawn(self, player: str, card: Card):
+        """
+        Update the state when a new card is drawn by a player
+        """
+        if player == self.root_player:
+            assert card.rank is None and card.color is None
+        else:
+            assert card.rank is not None and card.color is not None
+            self.deck.remove_cards([card])
+        self.hands[player].append(card)
+
+    def hint_given(
+        self, destination: str, cards_idx: list[int], hint_type: str, hint_value: int
+    ) -> None:
         """ """
-        if self.hints == MAX_HINTS:
-            # TODO: check this
-            raise RuntimeError("Trying to use more token hints than allowed")
+        hand = self.hands[destination]
+        for idx in cards_idx:
+            card = hand[idx]
+            if card.is_fully_determined():
+                continue
+            if hint_type == "value":
+                card.reveal_rank(hint_value)
+            elif hint_type == "color":
+                card.reveal_color(hint_value)
+            # the root player fully determined a card and now knows it's not in the deck
+            if destination == self.root_player and card.is_fully_determined():
+                self.deck.remove_cards([card])
         self.hints += 1
-
-    def mistake_made(self) -> None:
-        """ """
-        if self.errors >= MAX_ERRORS:
-            raise RuntimeError("Too many error tokens")
-        self.errors += 1
-
-    def card_correctly_played(self, color: Color) -> None:
-        """ """
-        if self.board[color] >= self.trash.maxima[color]:
-            raise RuntimeError("Trying to play a card that doesn't exists")
-        self.board[color] += 1
-        self.hints = max(0, self.hints - 1)  # gain an hint if possible
 
     def game_ended(self) -> tuple[bool, int]:
         """
@@ -449,7 +180,8 @@ class GameState:
         If the game isn't ended, it returns False, None
         """
         if self.errors == MAX_ERRORS:
-            return True, 0
+            return True, sum(self.board)
+            # return True, 0
         if self.board == self.trash.maxima:
             return True, sum(self.board)
         if self.deck.is_empty():
@@ -621,8 +353,8 @@ class MCTSState(GameState):
     def assert_consistency(self):
         col = np.array(CARD_QUANTITIES)
         col = col.reshape(col.size, 1)
-        full_table = np.tile(col, len(colors))
-        table = np.copy(self.deck[:, :])
+        full_table = np.tile(col, len(Color))
+        table = np.copy(self.deck._table[:, :])
 
         # trash
         trash_table = full_table - self.trash.get_table()
