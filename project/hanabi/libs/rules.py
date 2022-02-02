@@ -45,7 +45,7 @@ def _get_probabilities(
         number_of_determinizations = np.sum(possibilities)
         number_of_playable = 0
         for r, c in zip(*np.nonzero(possibilities)):
-            if fn_condition(Card(r + 1, c), state.board):
+            if fn_condition(Card(r + 1, c), board):
                 number_of_playable += possibilities[r][c]
         probabilities[idx] = number_of_playable / number_of_determinizations
 
