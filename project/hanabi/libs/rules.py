@@ -1,4 +1,4 @@
-from typing import List, Callable
+from typing import List, Callable, Optional
 import copy
 from game_state import MCTSState
 from model import GameMove
@@ -103,7 +103,7 @@ def tell_most_information(state: MCTSState, player: str) -> GameMove:
 
 
 # RULE 2
-def tell_anyone_about_useful(state: MCTSState, player: str) -> GameMove:
+def tell_anyone_about_useful(state: MCTSState, player: str) -> Optional[GameMove]:
     action_type = "hint"
     while True:
         destination = state.get_next_player_name(player)
@@ -127,7 +127,7 @@ def tell_anyone_about_useful(state: MCTSState, player: str) -> GameMove:
 
 
 # RULE 3
-def tell_dispensable(state: MCTSState, player: str) -> GameMove:
+def tell_dispensable(state: MCTSState, player: str) -> Optional[GameMove]:
     action_type = "hint"
     while True:
         destination = state.get_next_player_name(player)
@@ -151,7 +151,7 @@ def tell_dispensable(state: MCTSState, player: str) -> GameMove:
 
 
 # RULE 4
-def complete_tell_playable_card(state: MCTSState, player: str) -> GameMove:
+def complete_tell_playable_card(state: MCTSState, player: str) -> Optional[GameMove]:
     action_type = "hint"
     move = None
     while True:
@@ -168,7 +168,8 @@ def complete_tell_playable_card(state: MCTSState, player: str) -> GameMove:
             elif card.color_known and not card.rank_known:
                 hint_type = "value"
                 hint_value = card.rank
-            elif not card.color_known and card.rank_known:
+            # elif not card.color_known and card.rank_known:
+            else:
                 hint_type = "color"
                 hint_value = card.color
             move = GameMove(
@@ -183,7 +184,7 @@ def complete_tell_playable_card(state: MCTSState, player: str) -> GameMove:
 
 
 # RULE 5
-def complete_tell_dispensable_card(state: MCTSState, player: str) -> GameMove:
+def complete_tell_dispensable_card(state: MCTSState, player: str) -> Optional[GameMove]:
     action_type = "hint"
     move = None
     while True:
@@ -200,7 +201,8 @@ def complete_tell_dispensable_card(state: MCTSState, player: str) -> GameMove:
             elif not card.color_known and card.rank_known:
                 hint_type = "color"
                 hint_value = card.color
-            elif card.color_known and not card.rank_known:
+            # elif card.color_known and not card.rank_known:
+            else:
                 hint_type = "value"
                 hint_value = card.rank
             move = GameMove(
@@ -217,7 +219,7 @@ def complete_tell_dispensable_card(state: MCTSState, player: str) -> GameMove:
 # RULE 6
 def complete_tell_currently_not_playable_card(
     state: MCTSState, player: str
-) -> GameMove:
+) -> Optional[GameMove]:
     action_type = "hint"
     move = None
     while True:
@@ -234,7 +236,8 @@ def complete_tell_currently_not_playable_card(
             elif not card.color_known and card.rank_known:
                 hint_type = "color"
                 hint_value = card.color
-            elif card.color_known and not card.rank_known:
+            # elif card.color_known and not card.rank_known:
+            else:
                 hint_type = "value"
                 hint_value = card.rank
             move = GameMove(
@@ -251,13 +254,13 @@ def complete_tell_currently_not_playable_card(
 # RULE 7
 def play_probably_safe(
     state: MCTSState, player: str, threshold: float = 0.7
-) -> GameMove:
+) -> Optional[GameMove]:
     action_type = "play"
     hand = state.hands[player]
     mental_state = copy.deepcopy(state.deck)
     mental_state.add_cards(hand, ignore_fd=True)
 
-    probabilities = _get_probabilities(hand, mental_state[:, :], _is_playable)
+    probabilities = _get_probabilities(hand, mental_state[:, :], _is_playable, state.board)
 
     if np.max(probabilities) >= threshold:
         best_idx = np.argmax(probabilities)
