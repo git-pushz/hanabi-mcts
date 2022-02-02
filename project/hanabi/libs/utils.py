@@ -107,7 +107,12 @@ class Deck:
 
     def __getitem__(self, item):
         if type(item) is tuple:
-            return self._table[item[0] - 1, item[1]]
+            if type(item[0]) is int:
+                return self._table[item[0] - 1, item[1]]
+            elif type(item[0]) is slice:
+                return self._table[item[0], item[1]]
+            else:
+                raise IndexError
         else:
             raise IndexError
 

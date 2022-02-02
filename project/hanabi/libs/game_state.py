@@ -12,8 +12,6 @@ from utils import (
     Trash,
 )
 
-colors = ["red", "yellow", "green", "blue", "white"]
-
 MAX_HINTS = 8
 MAX_ERRORS = 3
 HAND_SIZE = 5
@@ -348,7 +346,7 @@ class MCTSState(GameState):
     def assert_consistency(self):
         col = np.array(CARD_QUANTITIES)
         col = col.reshape(col.size, 1)
-        full_table = np.tile(col, len(colors))
+        full_table = np.tile(col, len(Color))
         table = np.copy(self.deck[slice(5), slice(5)])
 
         # trash
@@ -377,7 +375,8 @@ class MCTSState(GameState):
             # return True, 0
         if self.board == self.trash.maxima:
             return True, sum(self.board)
-        if all(self.last_turn_played.values()):
+        # if all(self.last_turn_played.values()):
+        if len(self.deck) == 0:
             return True, sum(self.board)
         return False, None
 

@@ -3,8 +3,6 @@ from typing import List
 import random
 import numpy as np
 from constants import SEED
-from game_state import GameState, Card, color_enum2str, color_str2enum
-from constants import SEED
 from game_state import GameState
 from utils import Card, Color, color_enum2str, color_str2enum
 from mcts import MCTS
