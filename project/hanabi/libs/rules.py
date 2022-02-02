@@ -1,7 +1,7 @@
 from typing import List, Callable, Optional
 import copy
 from game_state import MCTSState
-from model import GameMove
+from game_move import GameMove
 from utils import Card, Color, CARD_QUANTITIES
 import numpy as np
 
@@ -51,20 +51,20 @@ class Rules:
         return all(first == x for x in iterator)
 
     @staticmethod
-    def _is_playable(card: Card, board: np.typing.NDArray) -> bool:
+    def _is_playable(card: Card, board) -> bool:
         return board[card.color] == card.rank - 1
 
     @staticmethod
-    def _is_discardable(card: Card, board: np.typing.NDArray) -> bool:
+    def _is_discardable(card: Card, board) -> bool:
         return board[card.color] >= card.rank
 
     @staticmethod
     def _get_probabilities(
-                           hand: List[Card],
-                           mental_state,
-                           fn_condition: Callable[[Card, np.typing.NDArray], bool],
-                           board: np.typing.NDArray,
-                           ) -> np.typing.NDArray[float]:
+        hand: List[Card],
+        mental_state,
+        fn_condition,
+        board,
+    ):
         probabilities = np.empty(len(hand), dtype=np.float)
 
         for idx, card in enumerate(hand):
@@ -141,12 +141,18 @@ class Rules:
     @staticmethod
     def _tell_anyone_about_useful(state: MCTSState, player: str) -> Optional[GameMove]:
         action_type = "hint"
+        if state.hints_available() == 0:
+            return None
+        destination = player
         while True:
-            destination = state.get_next_player_name(player)
+            destination = state.get_next_player_name(destination)
             if destination == player:
                 return None
             for idx, card in enumerate(state.hands[destination]):
-                if Rules._is_playable(card, state.board) and not card.is_fully_determined():
+                if (
+                    Rules._is_playable(card, state.board)
+                    and not card.is_fully_determined()
+                ):
                     if not card.rank_known:
                         hint_type = "value"
                         hint_value = card.rank
@@ -165,12 +171,18 @@ class Rules:
     @staticmethod
     def _tell_dispensable(state: MCTSState, player: str) -> Optional[GameMove]:
         action_type = "hint"
+        if state.hints_available() == 0:
+            return None
+        destination = player
         while True:
-            destination = state.get_next_player_name(player)
+            destination = state.get_next_player_name(destination)
             if destination == player:
                 return None
             for idx, card in enumerate(state.hands[destination]):
-                if Rules._is_discardable(card, state.board) and not card.is_fully_determined():
+                if (
+                    Rules._is_discardable(card, state.board)
+                    and not card.is_fully_determined()
+                ):
                     if not card.rank_known:
                         hint_type = "value"
                         hint_value = card.rank
@@ -187,11 +199,16 @@ class Rules:
 
     # RULE 4
     @staticmethod
-    def _complete_tell_playable_card(state: MCTSState, player: str) -> Optional[GameMove]:
+    def _complete_tell_playable_card(
+        state: MCTSState, player: str
+    ) -> Optional[GameMove]:
         action_type = "hint"
+        if state.hints_available() == 0:
+            return None
         move = None
+        destination = player
         while True:
-            destination = state.get_next_player_name(player)
+            destination = state.get_next_player_name(destination)
             if destination == player:
                 break
             for card in state.hands[destination]:
@@ -220,11 +237,16 @@ class Rules:
 
     # RULE 5
     @staticmethod
-    def _complete_tell_dispensable_card(state: MCTSState, player: str) -> Optional[GameMove]:
+    def _complete_tell_dispensable_card(
+        state: MCTSState, player: str
+    ) -> Optional[GameMove]:
         action_type = "hint"
+        if state.hints_available() == 0:
+            return None
         move = None
+        destination = player
         while True:
-            destination = state.get_next_player_name(player)
+            destination = state.get_next_player_name(destination)
             if destination == player:
                 break
             for _, card in enumerate(state.hands[destination]):
@@ -254,12 +276,15 @@ class Rules:
     # RULE 6
     @staticmethod
     def _complete_tell_currently_not_playable_card(
-                                                  state: MCTSState, player: str
-                                                  ) -> Optional[GameMove]:
+        state: MCTSState, player: str
+    ) -> Optional[GameMove]:
         action_type = "hint"
+        if state.hints_available() == 0:
+            return None
         move = None
+        destination = player
         while True:
-            destination = state.get_next_player_name(player)
+            destination = state.get_next_player_name(destination)
             if destination == player:
                 break
             for _, card in enumerate(state.hands[destination]):
@@ -289,14 +314,16 @@ class Rules:
     # RULE 7
     @staticmethod
     def _play_probably_safe(
-                           state: MCTSState, player: str, threshold: float = 0.7
-                           ) -> Optional[GameMove]:
+        state: MCTSState, player: str, threshold: float = 0.7
+    ) -> Optional[GameMove]:
         action_type = "play"
         hand = state.hands[player]
         mental_state = copy.deepcopy(state.deck)
         mental_state.add_cards(hand, ignore_fd=True)
 
-        probabilities = Rules._get_probabilities(hand, mental_state[:, :], Rules._is_playable, state.board)
+        probabilities = Rules._get_probabilities(
+            hand, mental_state[:, :], Rules._is_playable, state.board
+        )
 
         if np.max(probabilities) >= threshold:
             best_idx = np.argmax(probabilities)
@@ -306,7 +333,9 @@ class Rules:
 
     # RULE 8
     @staticmethod
-    def _play_probably_safe_late(state: MCTSState, player: str, threshold: float = 0.4) -> GameMove:
+    def _play_probably_safe_late(
+        state: MCTSState, player: str, threshold: float = 0.4
+    ) -> GameMove:
         move = None
         if len(state.deck) <= 5:
             move = Rules._play_probably_safe(state, player, threshold)
@@ -315,14 +344,18 @@ class Rules:
     # RULE 9
     @staticmethod
     def _discard_probably_useless(
-                                 state: MCTSState, player: str, threshold: float
-                                 ) -> GameMove:
+        state: MCTSState, player: str, threshold: float = 0.7
+    ) -> GameMove:
         action_type = "discard"
+        if state.hints == 0:
+            return None
         hand = state.hands[player]
         mental_state = copy.deepcopy(state.deck)
         mental_state.add_cards(hand, ignore_fd=True)
 
-        probabilities = Rules._get_probabilities(hand, mental_state[:, :], Rules._is_discardable, state.board)
+        probabilities = Rules._get_probabilities(
+            hand, mental_state[:, :], Rules._is_discardable, state.board
+        )
 
         if np.max(probabilities) >= threshold:
             best_idx = np.argmax(probabilities)
