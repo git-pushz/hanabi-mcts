@@ -7,7 +7,7 @@ import sys
 from game import Card
 from collections import deque
 import time
-from constants import SEED
+from libs.constants import SEED
 
 DEBUG = False
 HINT_DEBUG = False
@@ -614,7 +614,8 @@ class Agent:
             data: The game state to use to initialize the Agent
             players_names: The list of players names in turn order
         """
-        np.random.seed(SEED)
+        if SEED is not None:
+            np.random.seed(SEED)
         self.name = name
         if LOG:
             self.FILE = f"LOG{self.name}.log"

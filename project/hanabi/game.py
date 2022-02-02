@@ -1,8 +1,9 @@
+import random
 from copy import deepcopy
 from random import shuffle, Random
 import GameData
 import logging
-from constants import SEED
+from libs.constants import SEED
 
 class Card(object):
     def __init__(self, id, value, color) -> None:
@@ -333,7 +334,10 @@ class Game(object):
 
     def start(self):
         self.__lastMoves = len(self.__players) + 1
-        Random(SEED).shuffle(self.__cardsToDraw)
+        if SEED is not None:
+            Random(SEED).shuffle(self.__cardsToDraw)
+        else:
+            random.shuffle(self.__cardsToDraw)
         if len(self.__players) < 2:
             logging.warning("Not enough players!")
             return

@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 
 import random
 import numpy as np
@@ -108,7 +108,7 @@ class Agent:
         self,
         hints_used: int,
         mistakes_made: int,
-        board: list,
+        board: Optional[list, dict],
         trash: list,
         players: list,
     ) -> None:

@@ -2,7 +2,6 @@ import os
 import GameData
 import socket
 from game import Game
-from game import Player
 import threading
 from constants import *
 import logging

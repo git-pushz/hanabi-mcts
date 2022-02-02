@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import sys
 from sys import argv, stdout
 from threading import Thread
 from threading import Condition
