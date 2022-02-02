@@ -84,6 +84,20 @@ def main():
             with cv:
                 cv.notify()
 
+    def check_turn_and_new_cards(
+        agent: Agent, new_card_drawn: bool, last_player: str, current_player: str
+    ) -> None:
+        if last_player == agent.name:
+            if new_card_drawn:
+                agent.draw_card()
+            print("Current player: " + current_player)
+        else:
+            if new_card_drawn:
+                # trigger a check for the new drawn card and the next player
+                show_action()
+            else:
+                check_agent_turn(current_player)
+
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         request = GameData.ClientPlayerAddData(agent_name)
         s.connect((ip, port))
@@ -170,14 +184,9 @@ def main():
 
                 agent.track_discarded_card(data.lastPlayer, data.cardHandIndex)
 
-                if data.handLength == HAND_SIZE:
-                    if data.lastPlayer == agent_name:
-                        agent.draw_card()
-                        # print("Current player: " + data.player)
-                        # possibly notify the condition variable
-                        # check_agent_turn(data.player)
-                    else:
-                        show_action()  # this will trigger a check for the new drawn card
+                check_turn_and_new_cards(
+                    agent, data.handLength == HAND_SIZE, data.lastPlayer, data.player
+                )
 
             # 6 received when one player plays a card correctly
             if type(data) is GameData.ServerPlayerMoveOk:
@@ -191,14 +200,9 @@ def main():
                     data.lastPlayer, data.cardHandIndex, correctly=True
                 )
 
-                if data.handLength == HAND_SIZE:
-                    if data.lastPlayer == agent_name:
-                        agent.draw_card()
-                        print("Current player: " + data.player)
-                        # possibly notify the condition variable
-                        # check_agent_turn(data.player)
-                    else:
-                        show_action()  # this will trigger a check for the new drawn card
+                check_turn_and_new_cards(
+                    agent, data.handLength == HAND_SIZE, data.lastPlayer, data.player
+                )
 
             # 7 received when one player makes a mistake
             if type(data) is GameData.ServerPlayerThunderStrike:
@@ -212,14 +216,9 @@ def main():
                     data.lastPlayer, data.cardHandIndex, correctly=False
                 )
 
-                if data.handLength == HAND_SIZE:
-                    if data.lastPlayer == agent_name:
-                        agent.draw_card()
-                        print("Current player: " + data.player)
-                        # possibly notify the condition variable
-                        # check_agent_turn(data.player)
-                    else:
-                        show_action()  # this will trigger a check for the new drawn card
+                check_turn_and_new_cards(
+                    agent, data.handLength == HAND_SIZE, data.lastPlayer, data.player
+                )
 
             # 8 received when one player hints another player
             if type(data) is GameData.ServerHintData:
