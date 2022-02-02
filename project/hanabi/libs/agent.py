@@ -96,7 +96,7 @@ class Agent:
         self._game_state.card_drawn(self.name, Card(None, None))
 
     def track_hint(
-        self, destination: str, cards_idx: list[int], hint_type: str, hint_value: int
+        self, destination: str, cards_idx: List[int], hint_type: str, hint_value: int
     ) -> None:
         """
         Update the agent's knowledge based on the hint that was just given

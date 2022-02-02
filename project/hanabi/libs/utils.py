@@ -2,6 +2,9 @@ import copy
 import numpy as np
 from enum import IntEnum
 import random
+
+from typing import List
+
 import game
 
 
@@ -136,16 +139,16 @@ class Deck:
         ), "trying to increment maximum value from Deck"
         self._table[rank - 1][color] += 1
 
-    def remove_cards(self, cards: list[Card]) -> None:
+    def remove_cards(self, cards: List[Card]) -> None:
         for card in cards:
             self._decrement(card.rank, card.color)
 
-    def add_cards(self, cards: list[Card], ignore_fd: bool = False) -> None:
+    def add_cards(self, cards: List[Card], ignore_fd: bool = False) -> None:
         for card in cards:
             if not (ignore_fd and card.is_fully_determined()):
                 self._increment(card.rank, card.color)
 
-    def reserve_semi_determined_cards(self, cards: list[Card]) -> None:
+    def reserve_semi_determined_cards(self, cards: List[Card]) -> None:
         assert np.all(
             self._reserved_colors == 0
         ), "Color reservation not reset correctly"
