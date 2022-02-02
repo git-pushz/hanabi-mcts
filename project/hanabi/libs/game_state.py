@@ -198,7 +198,7 @@ class MCTSState(GameState):
         self.errors = initial_state.errors
         # determinize root's hand
         root_hand = self.hands[self.root_player]
-        self.deck.reserve_cards(root_hand)
+        self.deck.reserve_semi_determined_cards(root_hand)
         for idx, card in enumerate(root_hand):
             if not card.is_fully_determined():
                 # TODO DRAW SHOULDN'T FAIL HERE
@@ -269,23 +269,18 @@ class MCTSState(GameState):
         hand = self.hands[player_name]
         if player_name == self.root_player:
             raise RuntimeError("Cannot re-determinize root player's hand")
-        self.deck.add_cards(hand, redeterminizing=True)
 
-        # for idx, card in enumerate(hand):
-        #     rank = card.rank if card.rank_known else None
-        #     color = card.color if card.color_known else None
-        #     new_card = self.deck.draw(rank=rank, color=color)
-        #     new_card.rank_known = card.rank_known
-        #     new_card.color_known = card.color_known
-        #     hand[idx] = new_card
+        self.deck.reserve_semi_determined_cards(hand)
+        self.deck.add_cards(hand, ignore_fd=True)
 
         for idx, card in enumerate(hand):
-            rank = card.rank if card.rank_known else None
-            color = card.color if card.color_known else None
-            new_card = self.deck.draw2(rank=rank, color=color)
-            new_card.rank_known = card.rank_known
-            new_card.color_known = card.color_known
-            hand[idx] = new_card
+            if not card.is_fully_determined():
+                rank = card.rank if card.rank_known else None
+                color = card.color if card.color_known else None
+                new_card = self.deck.draw2(rank=rank, color=color)
+                new_card.rank_known = card.rank_known
+                new_card.color_known = card.color_known
+                hand[idx] = new_card
 
     # MCTS
     def restore_hand(self, player_name: str, saved_hand: List[Card]) -> None:
@@ -371,7 +366,7 @@ class MCTSState(GameState):
         If the game isn't ended, it returns False, None
         """
         if self.errors == MAX_ERRORS:
-            return True, sum(self.board)
+            return True, sum(self.board) // 2
             # return True, 0
         if self.board == self.trash.maxima:
             return True, sum(self.board)
