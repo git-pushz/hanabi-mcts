@@ -17,7 +17,9 @@ MOVE_TIME_BUDGET = 5
 
 
 class Agent:
-    def __init__(self, name: str, data: GameData.ServerGameStateData, players_names: list):
+    def __init__(
+        self, name: str, data: GameData.ServerGameStateData, players_names: list
+    ):
         self.name = name
         self._game_state = GameState(players_names, name, data)
         self.turn = 0
