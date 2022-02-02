@@ -1,11 +1,7 @@
 import copy
-import random
-from enum import IntEnum
 import numpy as np
 from typing import List, Tuple
-
 import GameData
-import game
 
 from utils import (
     CARD_QUANTITIES,
@@ -17,15 +13,6 @@ from utils import (
 )
 
 colors = ["red", "yellow", "green", "blue", "white"]
-
-
-class Color(IntEnum):
-    RED = 0
-    YELLOW = 1
-    GREEN = 2
-    BLUE = 3
-    WHITE = 4
-
 
 MAX_HINTS = 8
 MAX_ERRORS = 3
@@ -160,7 +147,7 @@ class GameState:
             assert card.rank == self.board[card.color] + 1
             self.board[card.color] += 1
             if card.rank == 5 and self.hints > 0:
-                self.hint -= 1
+                self.hints -= 1
         else:
             self.trash.append(card)
             if self.errors >= MAX_ERRORS:
@@ -179,7 +166,7 @@ class GameState:
         self.hands[player].append(card)
 
     def hint_given(
-        self, destination: str, cards_idx: list[int], hint_type: str, hint_value: int
+        self, destination: str, cards_idx: List[int], hint_type: str, hint_value: int
     ) -> None:
         """ """
         hand = self.hands[destination]
