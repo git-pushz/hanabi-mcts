@@ -37,7 +37,6 @@ CARD_QUANTITIES = [3, 2, 2, 2, 1]
 
 class Card:
     def __init__(self, rank: int, color: Color) -> None:
-        # id ?
         self.rank = rank
         self.color = color
         self.rank_known = False
