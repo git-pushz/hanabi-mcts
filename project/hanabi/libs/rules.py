@@ -28,11 +28,11 @@ def _get_probabilities(
     mental_state,
     fn_condition: Callable[[Card, np.typing.NDArray], bool],
     board: np.typing.NDArray,
-) -> List[float]:
+) -> np.typing.NDArray[float]:
     probabilities = np.empty(len(hand), dtype=np.float)
 
     for idx, card in enumerate(hand):
-        possibilities = np.copy(mental_state._table)
+        possibilities = np.copy(mental_state[:, :])
         if card.rank_known:
             mask = np.full(len(CARD_QUANTITIES), False)
             mask[card.rank - 1] = True
@@ -102,6 +102,7 @@ def tell_most_information(state: MCTSState, player: str) -> GameMove:
     return best_move
 
 
+# RULE 2
 def tell_anyone_about_useful(state: MCTSState, player: str) -> GameMove:
     action_type = "hint"
     while True:
@@ -125,6 +126,7 @@ def tell_anyone_about_useful(state: MCTSState, player: str) -> GameMove:
                 )
 
 
+# RULE 3
 def tell_dispensable(state: MCTSState, player: str) -> GameMove:
     action_type = "hint"
     while True:
@@ -148,6 +150,7 @@ def tell_dispensable(state: MCTSState, player: str) -> GameMove:
                 )
 
 
+# RULE 4
 def complete_tell_playable_card(state: MCTSState, player: str) -> GameMove:
     action_type = "hint"
     move = None
@@ -179,6 +182,7 @@ def complete_tell_playable_card(state: MCTSState, player: str) -> GameMove:
     return move
 
 
+# RULE 5
 def complete_tell_dispensable_card(state: MCTSState, player: str) -> GameMove:
     action_type = "hint"
     move = None
@@ -210,6 +214,7 @@ def complete_tell_dispensable_card(state: MCTSState, player: str) -> GameMove:
     return move
 
 
+# RULE 6
 def complete_tell_currently_not_playable_card(
     state: MCTSState, player: str
 ) -> GameMove:
@@ -252,13 +257,21 @@ def play_probably_safe(
     mental_state = copy.deepcopy(state.deck)
     mental_state.add_cards(hand, ignore_fd=True)
 
-    probabilities = _get_probabilities(hand, mental_state._table, _is_playable)
+    probabilities = _get_probabilities(hand, mental_state[:, :], _is_playable)
 
     if np.max(probabilities) >= threshold:
         best_idx = np.argmax(probabilities)
         return GameMove(player, action_type, card_idx=best_idx)
     else:
         return None
+
+
+# RULE 8
+def play_probably_safe_late(state: MCTSState, player: str, threshold: float = 0.7) -> GameMove:
+    move = None
+    if len(state.deck) <= 5:
+        move = play_probably_safe(state, player, 0.4)
+    return move
 
 
 # RULE 9
@@ -270,7 +283,7 @@ def discard_probably_useless(
     mental_state = copy.deepcopy(state.deck)
     mental_state.add_cards(hand, ignore_fd=True)
 
-    probabilities = _get_probabilities(hand, mental_state._table, _is_discardable)
+    probabilities = _get_probabilities(hand, mental_state[:, :], _is_discardable, state.board)
 
     if np.max(probabilities) >= threshold:
         best_idx = np.argmax(probabilities)
