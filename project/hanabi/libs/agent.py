@@ -12,8 +12,8 @@ DEBUG = False
 VERBOSE = True
 LOG = False
 
-MCTS_ITERATIONS = 50
-MOVE_TIME_BUDGET = 5
+MCTS_ITERATIONS = 10
+MOVE_TIME_BUDGET = 3
 
 
 class Agent:
@@ -31,7 +31,8 @@ class Agent:
         """ """
         self.turn += 1
         mcts = MCTS(self._game_state, self.name)
-        move = mcts.run_search(iterations=MCTS_ITERATIONS)
+        # move = mcts.run_search(iterations=MCTS_ITERATIONS)
+        move = mcts.run_search(time_budget=MOVE_TIME_BUDGET)
         if move.action_type == "hint":
             hint_value = (
                 move.hint_value

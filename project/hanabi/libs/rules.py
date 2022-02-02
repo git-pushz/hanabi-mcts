@@ -61,21 +61,21 @@ class Rules:
     @staticmethod
     def _get_probabilities(
         hand: List[Card],
-        mental_state,
-        fn_condition,
-        board,
+        mental_state: np.ndarray,
+        fn_condition: Callable[[Card, np.ndarray], bool],
+        board: np.ndarray,
     ):
         probabilities = np.empty(len(hand), dtype=np.float)
 
         for idx, card in enumerate(hand):
             possibilities = np.copy(mental_state[:, :])
             if card.rank_known:
-                mask = np.full(len(CARD_QUANTITIES), False)
-                mask[card.rank - 1] = True
+                mask = np.full(len(CARD_QUANTITIES), True)
+                mask[card.rank - 1] = False
                 possibilities[mask, :] = 0
             if card.color_known:
-                mask = np.full(len(Color), False)
-                mask[card.color] = True
+                mask = np.full(len(Color), True)
+                mask[card.color] = False
                 possibilities[:, mask] = 0
 
             number_of_determinizations = np.sum(possibilities)
@@ -90,7 +90,7 @@ class Rules:
 
     # RULE 1
     @staticmethod
-    def _tell_most_information(state: MCTSState, player: str) -> GameMove:
+    def _tell_most_information(state: MCTSState, player: str) -> Optional[GameMove]:
         if state.hints_available() == 0:
             return None
 
@@ -322,7 +322,7 @@ class Rules:
         action_type = "play"
         hand = state.hands[player]
         mental_state = copy.deepcopy(state.deck)
-        mental_state.add_cards(hand, ignore_fd=True)
+        mental_state.add_cards(hand, ignore_fd=False)
 
         probabilities = Rules._get_probabilities(
             hand, mental_state[:, :], Rules._is_playable, state.board
@@ -348,13 +348,13 @@ class Rules:
     @staticmethod
     def _discard_probably_useless(
         state: MCTSState, player: str, threshold: float
-    ) -> GameMove:
+    ) -> Optional[GameMove]:
         action_type = "discard"
         if state.hints == 0:
             return None
         hand = state.hands[player]
         mental_state = copy.deepcopy(state.deck)
-        mental_state.add_cards(hand, ignore_fd=True)
+        mental_state.add_cards(hand, ignore_fd=False)
 
         probabilities = Rules._get_probabilities(
             hand, mental_state[:, :], Rules._is_discardable, state.board

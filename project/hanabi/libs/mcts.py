@@ -11,7 +11,7 @@ import numpy as np
 import random
 
 DEBUG = False
-SIMULATIONS_NUMBER = 50
+SIMULATIONS_NUMBER = 30
 
 
 def find(pred, iterable):
@@ -48,10 +48,11 @@ class MCTS:
             for _ in range(iterations):
                 self._run_search_iteration()
 
+        children = self.tree.get_children(self.tree.get_root())
         # selecting from the direct children of the root the one containing the move with most number of simulations
         best_move_node = reduce(
             lambda a, b: a if a.data.simulations > b.data.simulations else b,
-            self.tree.get_children(self.tree.get_root()),
+            children,
         )
         return best_move_node.data.move
 
@@ -146,8 +147,9 @@ class MCTS:
         # here random moves are made until someone wins, then the winning player is passed to backpropagation function
         # the problem is that in hanabi there is no winner (and probably moves can't be random)
         # so this function need some changes (at the end it needs to return the score)
-
+        n_iter = 0
         while not model.check_ended()[0]:
+            n_iter += 1
             current_player = model.state.get_next_player_name(current_player)
             # if there are no more legal moves (=> draw)
             if not model.make_random_move(current_player):

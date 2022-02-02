@@ -81,7 +81,7 @@ class GameState:
         result.deck = copy.deepcopy(self.deck)
         result.hints = self.hints
         result.errors = self.errors
-        result.last_turn_played = copy.copy(self.last_turn_played)
+        result.last_turn_played = copy.deepcopy(self.last_turn_played)
         return result
 
     @staticmethod
@@ -260,6 +260,7 @@ class MCTSState(GameState):
                 card.reveal_rank()
             elif hint_type == "color" and card.color == hint_value:
                 card.reveal_color()
+        self.hints += 1
 
     # MCTS
     def hints_available(self) -> int:
@@ -368,7 +369,8 @@ class MCTSState(GameState):
         if self.errors == MAX_ERRORS:
             return True, sum(self.board) // 2
             # return True, 0
-        if self.board == self.trash.maxima:
+        # if self.board == self.trash.maxima:
+        if np.all(self.board == 5):
             return True, sum(self.board)
         if all(self.last_turn_played.values()):
             return True, sum(self.board)
