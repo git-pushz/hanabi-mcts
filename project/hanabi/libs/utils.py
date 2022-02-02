@@ -42,7 +42,6 @@ class Card:
         self.color = color
         self.rank_known = False
         self.color_known = False
-        rank is not None and color is not None
 
     def __eq__(self, other):
         if type(other) is not Card and type(other) is not game.Card:
