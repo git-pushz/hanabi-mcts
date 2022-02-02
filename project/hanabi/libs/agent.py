@@ -1,14 +1,21 @@
 from typing import List
 
+import random
 import numpy as np
+from constants import SEED
 from game_state import GameState, Card, color_enum2str, color_str2enum
+from constants import SEED
+from game_state import GameState
+from utils import Card, Color, color_enum2str, color_str2enum
 from mcts import MCTS
 import GameData
 
 DEBUG = False
 VERBOSE = True
 LOG = False
-SEED = 27
+
+MCTS_ITERATIONS = 50
+MOVE_TIME_BUDGET = 5
 
 
 class Agent:
@@ -18,12 +25,13 @@ class Agent:
         self.turn = 0
         if SEED is not None:
             np.random.seed(SEED)
+            random.seed(SEED)
 
     def make_move(self) -> GameData.ClientToServerData:
         """ """
         self.turn += 1
         mcts = MCTS(self._game_state, self.name)
-        move = mcts.run_search(50)
+        move = mcts.run_search(iterations=MCTS_ITERATIONS)
         if move.action_type == "hint":
             hint_value = (
                 move.hint_value
@@ -40,8 +48,28 @@ class Agent:
         else:
             raise RuntimeError(f"Unknown action type received: {move.action_type}")
 
+    def discover_own_card(self, card, card_idx: int, action_type: str = None) -> None:
+        """
+        Called whenever the agent plays or discards a card, this function update the deck knowledge if the discovered card is NOT fully determined.
+
+        Args:
+            card: the played/discarded card
+            card_idx: the index of card in agent's hand
+            action_type: it's one of ['play', 'mistake', 'discard'] FOR DEBUG ONLY
+        """
+        self._game_state.root_card_discovered(
+            card_idx, card.value, color_str2enum[card.color]
+        )
+
+    def track_discarded_card(self, player: str, card_idx: int) -> None:
+        self._game_state.card_discarded(player, card_idx)
+
+    def track_played_card(self, player: str, card_idx: int, correctly: bool) -> None:
+        self._game_state.card_played(player, card_idx, correctly)
+
     def track_drawn_card(self, players: list) -> None:
         """
+        Track a card drawn by another player form the deck
         """
         different_hands = 0
         new_card = None
@@ -55,64 +83,26 @@ class Agent:
                     player = p.name
         assert new_card is not None, "new card not found"
         assert different_hands == 1, "too many different cards"
-
         assert player != self.name, "Cannot discover my cards"
-        # TODO: for the agent, a card with (None, None) should be appended?
-        self._game_state.append_card_to_player_hand(
+        self._game_state.card_drawn(
             player, Card(new_card.value, color_str2enum[new_card.color])
         )
 
-    def draw_unknown_card(self) -> None:
-        self._game_state.append_card_to_player_hand(self.name, Card(None, None))
+    def draw_card(self) -> None:
+        """
+        Draw a card from the deck. This will append a new unknwon
+        card (rank = None, color = None) to the agent's hand
+        """
+        self._game_state.card_drawn(self.name, Card(None, None))
 
-    def track_played_card(self, player: str, card_idx: int) -> None:
-        """
-        """
-        self._game_state.remove_card_from_hand(player, card_idx)
-
-    def update_trash(self, card) -> None:
-        """ """
-        self._game_state.update_trash(
-            Card(rank=card.value, color=color_str2enum[card.color])
-        )
-
-    def hint_gained(self) -> None:
-        """
-        """
-        self._game_state.gain_hint()
-
-    def hint_consumed(self) -> None:
-        """
-        """
-        self._game_state.use_hint()
-
-    def mistake_made(self) -> None:
-        """
-        """
-        self._game_state.mistake_made()
-
-    def discover_card(self, card, card_idx: int, action_type: str = None) -> None:
-        """
-        Called whenever the agent plays or discards a card, this function update the deck knowledge if the discovered card is NOT fully determined.
-
-        Args:
-            card: the played/discarded card
-            card_idx: the index of card in agent's hand
-            action_type: it's one of ['play', 'mistake', 'discard'] FOR DEBUG ONLY
-        """
-        self._game_state.discover_card_root(card.value, color_str2enum[card.color], card_idx)
-
-    def update_board(self, card) -> None:
-        """
-        """
-        self._game_state.card_correctly_played(color_str2enum[card.color])
-
-    def update_knowledge_on_hint(
-        self, hint_type: str, hint_value: int, cards_idx: List[int], destination: str
+    def track_hint(
+        self, destination: str, cards_idx: list[int], hint_type: str, hint_value: int
     ) -> None:
-        """ """
+        """
+        Update the agent's knowledge based on the hint that was just given
+        """
         value = hint_value if hint_type == "value" else color_str2enum[hint_value]
-        self._game_state.give_hint(cards_idx, destination, hint_type, value)
+        self._game_state.hint_given(destination, cards_idx, hint_type, value)
 
     def assert_aligned_with_server(
         self,
@@ -131,11 +121,8 @@ class Agent:
             trash: the list of actually discarded cards
             players: the list of objects of class Player - they also store their hands
         """
-        # assert self._game_state.hints == hints_used, "wrong count of hints"
+        assert self._game_state.hints == hints_used, "wrong count of hints"
         assert self._game_state.errors == mistakes_made, "wrong count of errors"
-
-        # TODO: remove
-        self._game_state.hints = hints_used
 
         # Board
         b = [len(cards) for cards in board.values()]
@@ -148,11 +135,8 @@ class Agent:
         assert len(client_trash) == len(trash)
         for idx in range(len(trash)):
             assert (
-                trash[idx].value == client_trash[idx].rank
-            ), f"Mismatch between cards value in trash (idx={idx})"
-            assert (
-                color_str2enum[trash[idx].color] == client_trash[idx].color
-            ), f"Mismatch between cards color in trash (idx={idx})"
+                client_trash[idx] == trash[idx]
+            ), f"Mismatch between cards in trash at idx {idx}"
 
         # Hands
         for player in players:
@@ -166,12 +150,23 @@ class Agent:
 
     def known_status(self) -> str:
         s = f"At turn {self.turn} my knowledge is\n"
+        s += "Colors: "
+        for color in Color:
+            s += color_enum2str[color] + " "
+        s += "\n"
         s += f"Board: {self._game_state.board}\n"
-        s += f"Hands:"
+        s += "Hands:"
         for p, h in self._game_state.hands.items():
             s += f"\tPlayer {p}: {h}\n"
         s += f"\nTrash: {self._game_state.trash}\n"
         s += f"Used hints: {self._game_state.hints}\n"
         s += f"Errors made: {self._game_state.errors}\n"
+        s += f"Deck table: {str(self._game_state.deck)}\n"
         return s
 
+
+# TODO
+# * Gestire le ultime giocate (quando il mazzo si svuota), sia nella partita "reale" che nelle simulazioni MC
+#   * Dedurre le ultime carte non determinate della mano / del mazzo
+# * Gestire l'ultimo giro a 4 carte (se il server lo richiede)
+# * Implementare le 9 regole per ridurre il branching factor nel MCTS

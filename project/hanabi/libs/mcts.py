@@ -2,11 +2,13 @@ import copy
 
 from typing import Tuple, List
 
+import time
 from model import Model, GameMove
 from game_state import GameState, MCTSState
 from tree import Tree, Node, GameNode
 from functools import reduce
 import numpy as np
+import random
 
 DEBUG = False
 SIMULATIONS_NUMBER = 50
@@ -28,10 +30,23 @@ class MCTS:
         )  # dummy game-move
         self.tree = Tree(root)
 
-    def run_search(self, iterations: int = 50) -> GameMove:
+    def run_search(self, time_budget: int = None, iterations: int = None) -> GameMove:
+        if (iterations is None) == (time_budget is None):
+            raise RuntimeError(
+                "Exactly one between iterations and time_budget must be specified"
+            )
+
         # each iteration represents the select, expand, simulate, backpropagate iteration
-        for _ in range(iterations):
-            self._run_search_iteration()
+
+        if time_budget is not None:
+            elapsed_time = 0
+            start_time = time.time()
+            while elapsed_time < time_budget:
+                self._run_search_iteration()
+                elapsed_time = time.time() - start_time
+        else:
+            for _ in range(iterations):
+                self._run_search_iteration()
 
         # selecting from the direct children of the root the one containing the move with most number of simulations
         best_move_node = reduce(
@@ -87,10 +102,9 @@ class MCTS:
         """
         return True if there is no more moves playable at a certain level that has not been tried yet
         """
-        # this function needs to be changed for the hanabi case
         return len(self._get_available_plays(node, model)) == 0
 
-    def _get_available_plays(self, node: Node, model) -> List[GameMove]:
+    def _get_available_plays(self, node: Node, model: Model) -> List[GameMove]:
         children = self.tree.get_children(node)
         player = model.state.get_next_player_name(node.data.move.player)
         # return only valid moves which haven't been already tried in children
@@ -107,7 +121,14 @@ class MCTS:
         # model.check_win should check if the match is over, not if it is won (see simulation and backpropagation function)
         if not model.check_ended()[0]:
             legal_moves = self._get_available_plays(node, model)
-            random_move = np.random.choice(legal_moves)
+            #####
+            if len(legal_moves) == 0:
+                player = model.state.get_next_player_name(node.data.move.player)
+                hand = model.state.hands[player]
+                for idx in range(len(hand)):
+                    legal_moves.append(GameMove(player, "play", card_idx=idx))
+            #####
+            random_move = random.choice(legal_moves)
             model.make_move(random_move)
             expanded_node = Node(GameNode(random_move))
             self.tree.insert(expanded_node, node)
@@ -126,7 +147,6 @@ class MCTS:
         # the problem is that in hanabi there is no winner (and probably moves can't be random)
         # so this function need some changes (at the end it needs to return the score)
 
-        # TODO only one simulation has been run, probably it is better to run a bunch of simulations
         while not model.check_ended()[0]:
             current_player = model.state.get_next_player_name(current_player)
             # if there are no more legal moves (=> draw)
@@ -167,18 +187,3 @@ class MCTS:
             lambda f: [f, self._UCB1(f, node)], self.tree.get_children(node)
         )
         return reduce(lambda a, b: a if a[1] > b[1] else b, list(node_scores))[0]
-
-
-## TODO
-# in mcts.py
-# adapt function is_fully_explored (medium)
-# actually the problem is when it calls get_available_plays
-# adapt function simulate (hard)
-# adapt function backpropagate (easy)
-
-# in model.py
-# adapt valid_moves (medium)
-# adapt make_move (medium)
-# adapt make_random_move (that should be changed to make_intentional_move) (hard)
-# adapt check_win (that should be changed to check_if_ended) (medium)
-#

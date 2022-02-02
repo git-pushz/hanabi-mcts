@@ -4,6 +4,7 @@ import copy
 from typing import Tuple, List
 
 from game_state import GameState, MCTSState
+from game_state import MCTSState
 
 NUM_COLUMNS = 7
 COLUMN_HEIGHT = 6
@@ -108,6 +109,7 @@ class Model:
     def __init__(self, mcts_state: MCTSState) -> None:
         self.state = mcts_state
         self._saved_hand = None
+        self.state.assert_consistency()
 
     def __deepcopy__(self, memo={}):
         cls = self.__class__
@@ -127,6 +129,7 @@ class Model:
             # TODO deepcopy
             self._saved_hand = copy.copy(self.state.hands[player])
             self.state.redeterminize_hand(player)
+        self.state.assert_consistency()
 
     def exit_node(self, player: str) -> None:
         """
@@ -138,6 +141,7 @@ class Model:
         if player != self.state.root_player and self._saved_hand is not None:
             self.state.restore_hand(player, self._saved_hand)
             self._saved_hand = None
+        self.state.assert_consistency()
 
     def valid_moves(self, this_player: str) -> List[GameMove]:
         """
@@ -153,6 +157,7 @@ class Model:
         hand = self.state.hands[this_player]
         for idx, card in enumerate(hand):
             actions = []
+            # if card.rank_known or (card.color_known and self.state.board[card.color] == card.rank - 1):
             if card.rank_known:
                 actions.append("play")
             if self.state.hints > 0:
@@ -198,6 +203,11 @@ class Model:
         Args:
             move: the move to perform
         """
+        if self.state.last_turn_played[move.player]:
+            raise RuntimeError(f"{move.player} already performed the last turn play")
+
+        is_last_move = len(self.state.deck) == 0
+
         if move.action_type == "play":
             self.state.play_card(move.player, move.card_idx)
         elif move.action_type == "discard":
@@ -206,6 +216,11 @@ class Model:
             self.state.give_hint(move.destination, move.hint_type, move.hint_value)
         else:
             raise RuntimeError(f"Unknown action type: {move.action_type}")
+
+        assert not self.state.last_turn_played[move.player]
+
+        if is_last_move:
+            self.state.last_turn_played[move.player] = True
 
     # the name should be changed to something like make_intentional_move, because it shouldn't be random
     def make_random_move(self, player: str) -> bool:
