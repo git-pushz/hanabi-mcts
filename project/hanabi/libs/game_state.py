@@ -375,8 +375,7 @@ class MCTSState(GameState):
             # return True, 0
         if self.board == self.trash.maxima:
             return True, sum(self.board)
-        # if all(self.last_turn_played.values()):
-        if len(self.deck) == 0:
+        if all(self.last_turn_played.values()):
             return True, sum(self.board)
         return False, None
 
