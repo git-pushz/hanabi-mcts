@@ -79,6 +79,7 @@ class Rules:
                 possibilities[:, mask] = 0
 
             number_of_determinizations = np.sum(possibilities)
+            assert number_of_determinizations > 0
             number_of_playable = 0
             for r, c in zip(*np.nonzero(possibilities)):
                 if fn_condition(Card(r + 1, c), board):
@@ -90,16 +91,18 @@ class Rules:
     # RULE 1
     @staticmethod
     def _tell_most_information(state: MCTSState, player: str) -> GameMove:
+        if state.hints_available() == 0:
+            return None
+
         best_move = None
         best_affected = -1
         new_information = True
-        players = list(state.hands.keys())
-        player_idx = players.index(player)
-        for i in range(1, len(players)):
-            # iterate over all players starting from next player
-            p = players[(player_idx + i) % len(players)]
+
+        p = player
+        while True:
+            p = state.get_next_player_name(p)
             if p == player:
-                continue
+                break
 
             hand = state.hands[p]
 
@@ -344,7 +347,7 @@ class Rules:
     # RULE 9
     @staticmethod
     def _discard_probably_useless(
-        state: MCTSState, player: str, threshold: float = 0.7
+        state: MCTSState, player: str, threshold: float
     ) -> GameMove:
         action_type = "discard"
         if state.hints == 0:
