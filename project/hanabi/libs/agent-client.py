@@ -5,6 +5,7 @@ import GameData
 import socket
 from constants import *
 from agent import Agent, DEBUG, VERBOSE, LOG
+from game_state import HAND_SIZE
 import os
 import traceback
 
@@ -169,13 +170,13 @@ def main():
 
                 agent.track_discarded_card(data.lastPlayer, data.cardHandIndex)
 
-                if data.lastPlayer == agent_name:
-                    agent.draw_card()
-                    print("Current player: " + data.player)
-                    # possibly notify the condition variable
-                    check_agent_turn(data.player)
-                else:
-                    if data.handLength == 5:
+                if data.handLength == HAND_SIZE:
+                    if data.lastPlayer == agent_name:
+                        agent.draw_card()
+                        # print("Current player: " + data.player)
+                        # possibly notify the condition variable
+                        # check_agent_turn(data.player)
+                    else:
                         show_action()  # this will trigger a check for the new drawn card
 
             # 6 received when one player plays a card correctly
@@ -190,13 +191,13 @@ def main():
                     data.lastPlayer, data.cardHandIndex, correctly=True
                 )
 
-                if data.lastPlayer == agent_name:
-                    agent.draw_card()
-                    print("Current player: " + data.player)
-                    # possibly notify the condition variable
-                    check_agent_turn(data.player)
-                else:
-                    if data.handLength == 5:
+                if data.handLength == HAND_SIZE:
+                    if data.lastPlayer == agent_name:
+                        agent.draw_card()
+                        print("Current player: " + data.player)
+                        # possibly notify the condition variable
+                        # check_agent_turn(data.player)
+                    else:
                         show_action()  # this will trigger a check for the new drawn card
 
             # 7 received when one player makes a mistake
@@ -211,13 +212,13 @@ def main():
                     data.lastPlayer, data.cardHandIndex, correctly=False
                 )
 
-                if data.lastPlayer == agent_name:
-                    agent.draw_card()
-                    print("Current player: " + data.player)
-                    # possibly notify the condition variable
-                    check_agent_turn(data.player)
-                else:
-                    if data.handLength == 5:
+                if data.handLength == HAND_SIZE:
+                    if data.lastPlayer == agent_name:
+                        agent.draw_card()
+                        print("Current player: " + data.player)
+                        # possibly notify the condition variable
+                        # check_agent_turn(data.player)
+                    else:
                         show_action()  # this will trigger a check for the new drawn card
 
             # 8 received when one player hints another player

@@ -2,7 +2,7 @@ import random
 import numpy as np
 from constants import SEED
 from game_state import GameState
-from utils import Card, color_enum2str, color_str2enum
+from utils import Card, Color, color_enum2str, color_str2enum
 from mcts import MCTS
 import GameData
 
@@ -11,6 +11,7 @@ VERBOSE = True
 LOG = False
 
 MCTS_ITERATIONS = 50
+MOVE_TIME_BUDGET = 5
 
 
 class Agent:
@@ -28,7 +29,7 @@ class Agent:
         """ """
         self.turn += 1
         mcts = MCTS(self._game_state, self.name)
-        move = mcts.run_search(MCTS_ITERATIONS)
+        move = mcts.run_search(iterations=MCTS_ITERATIONS)
         if move.action_type == "hint":
             hint_value = (
                 move.hint_value
@@ -132,11 +133,8 @@ class Agent:
         assert len(client_trash) == len(trash)
         for idx in range(len(trash)):
             assert (
-                trash[idx].value == client_trash[idx].rank
-            ), f"Mismatch between cards value in trash (idx={idx})"
-            assert (
-                color_str2enum[trash[idx].color] == client_trash[idx].color
-            ), f"Mismatch between cards color in trash (idx={idx})"
+                client_trash[idx] == trash[idx]
+            ), f"Mismatch between cards in trash at idx {idx}"
 
         # Hands
         for player in players:
@@ -150,6 +148,10 @@ class Agent:
 
     def known_status(self) -> str:
         s = f"At turn {self.turn} my knowledge is\n"
+        s += "Colors: "
+        for color in Color:
+            s += color_enum2str[color] + " "
+        s += "\n"
         s += f"Board: {self._game_state.board}\n"
         s += "Hands:"
         for p, h in self._game_state.hands.items():
@@ -157,7 +159,9 @@ class Agent:
         s += f"\nTrash: {self._game_state.trash}\n"
         s += f"Used hints: {self._game_state.hints}\n"
         s += f"Errors made: {self._game_state.errors}\n"
+        s += f"Deck table: {str(self._game_state.deck)}\n"
         return s
+
 
 # TODO
 # * Gestire le ultime giocate (quando il mazzo si svuota), sia nella partita "reale" che nelle simulazioni MC

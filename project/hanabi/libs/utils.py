@@ -59,11 +59,9 @@ class Card:
         return not self.__eq__(other)
 
     def __repr__(self):
-        rank = str(self.rank) if self.rank is not None else "unknown rank"
-        color = (
-            color_enum2str[self.color] if self.color is not None else "unknown color"
-        )
-        return f"Card {rank} {color}"
+        rank = str(self.rank) if self.rank is not None else ""
+        color = color_enum2str[self.color] if self.color is not None else ""
+        return f"Card ({rank},{color})"
 
     def reveal_rank(self, rank=None):
         if rank is None:
@@ -113,6 +111,14 @@ class Deck:
         else:
             raise IndexError
 
+    def __str__(self):
+        s = "\nr y g b w\n"
+        for r in range(self._table.shape[0]):
+            for v in self._table[r, :]:
+                s += f"{v} "
+            s += "\n"
+        return s
+
     def _decrement(self, rank: int, color: Color) -> None:
         assert (
             self._table[rank - 1][color] > 0
@@ -128,6 +134,18 @@ class Deck:
     def remove_cards(self, cards: list[Card]) -> None:
         for card in cards:
             self._decrement(card.rank, card.color)
+
+    def reserve_cards(self, cards: list[Card]) -> None:
+        assert np.all(
+            self._reserved_colors == 0
+        ), "Color reservation not reset correctly"
+        assert np.all(self._reserved_ranks == 0), "Rank reservation not reset correctly"
+        for card in cards:
+            if not card.is_fully_determined():
+                if card.rank_known:
+                    self._reserved_ranks[card.rank - 1] += 1
+                elif card.color_known:
+                    self._reserved_colors[card.color] += 1
 
     def add_cards(self, cards: list[Card], redeterminizing=False) -> None:
         # reset reservations
@@ -261,9 +279,6 @@ class Deck:
 
         assert rank is not None and color is not None
         return Card(rank, color)
-
-    def is_empty(self) -> bool:
-        return not np.any(self._table != 0)
 
 
 class Trash:

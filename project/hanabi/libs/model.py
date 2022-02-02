@@ -199,6 +199,11 @@ class Model:
         Args:
             move: the move to perform
         """
+        if self.state.last_turn_played[move.player]:
+            raise RuntimeError(f"{move.player} already performed the last turn play")
+
+        is_last_move = len(self.state.deck) == 0
+
         if move.action_type == "play":
             self.state.play_card(move.player, move.card_idx)
         elif move.action_type == "discard":
@@ -207,6 +212,11 @@ class Model:
             self.state.give_hint(move.destination, move.hint_type, move.hint_value)
         else:
             raise RuntimeError(f"Unknown action type: {move.action_type}")
+
+        assert not self.state.last_turn_played[move.player]
+
+        if is_last_move:
+            self.state.last_turn_played[move.player] = True
 
     # the name should be changed to something like make_intentional_move, because it shouldn't be random
     def make_random_move(self, player: str) -> bool:

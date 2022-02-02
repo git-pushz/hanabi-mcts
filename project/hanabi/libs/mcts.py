@@ -1,4 +1,5 @@
 import copy
+import time
 from model import Model, GameMove
 from game_state import GameState, MCTSState
 from tree import Tree, Node, GameNode
@@ -26,10 +27,23 @@ class MCTS:
         )  # dummy game-move
         self.tree = Tree(root)
 
-    def run_search(self, iterations: int = 50) -> GameMove:
+    def run_search(self, time_budget: int = None, iterations: int = None) -> GameMove:
+        if (iterations is None) == (time_budget is None):
+            raise RuntimeError(
+                "Exactly one between iterations and time_budget must be specified"
+            )
+
         # each iteration represents the select, expand, simulate, backpropagate iteration
-        for _ in range(iterations):
-            self._run_search_iteration()
+
+        if time_budget is not None:
+            elapsed_time = 0
+            start_time = time.time()
+            while elapsed_time < time_budget:
+                self._run_search_iteration()
+                elapsed_time = time.time() - start_time
+        else:
+            for _ in range(iterations):
+                self._run_search_iteration()
 
         # selecting from the direct children of the root the one containing the move with most number of simulations
         best_move_node = reduce(

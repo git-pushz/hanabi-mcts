@@ -66,6 +66,7 @@ class GameState:
             for player, hand in self.hands.items():
                 if player != self.root_player:
                     self.deck.remove_cards(hand)
+        self.last_turn_played = None  # Only used in MCTSState
 
     def __deepcopy__(self, memo={}):
         cls = self.__class__
@@ -78,6 +79,7 @@ class GameState:
         result.deck = copy.deepcopy(self.deck)
         result.hints = self.hints
         result.errors = self.errors
+        result.last_turn_played = copy.copy(self.last_turn_played)
         return result
 
     @staticmethod
@@ -109,6 +111,9 @@ class GameState:
         return self.players[next_player_idx]
 
     def root_card_discovered(self, card_idx: int, rank: int, color: Color) -> None:
+        """
+        Let the root player discover a card in his own hand
+        """
         card = self.hands[self.root_player][card_idx]
         if not card.is_fully_determined():
             card.reveal_rank(rank)
@@ -145,7 +150,7 @@ class GameState:
                 raise RuntimeError("Max number of error tokens already reached")
             self.errors += 1
 
-    def card_drawn(self, player: str, card: Card):
+    def card_drawn(self, player: str, card: Card) -> None:
         """
         Update the state when a new card is drawn by a player
         """
@@ -174,20 +179,6 @@ class GameState:
                 self.deck.remove_cards([card])
         self.hints += 1
 
-    def game_ended(self) -> tuple[bool, int]:
-        """
-        Checks if the game is ended for some reason. If it's ended, it returns True and the score of the game.
-        If the game isn't ended, it returns False, None
-        """
-        if self.errors == MAX_ERRORS:
-            return True, sum(self.board)
-            # return True, 0
-        if self.board == self.trash.maxima:
-            return True, sum(self.board)
-        if self.deck.is_empty():
-            return True, sum(self.board)
-        return False, None
-
 
 class MCTSState(GameState):
     """ """
@@ -205,13 +196,16 @@ class MCTSState(GameState):
         self.errors = initial_state.errors
         # determinize root's hand
         root_hand = self.hands[self.root_player]
+        self.deck.reserve_cards(root_hand)
         for idx, card in enumerate(root_hand):
             if not card.is_fully_determined():
-                new_card = self.deck.draw(rank=card.rank, color=card.color)
+                # TODO DRAW SHOULDN'T FAIL HERE
+                new_card = self.deck.draw2(rank=card.rank, color=card.color)
                 assert new_card.rank is not None and new_card.color is not None
                 new_card.rank_known = card.rank_known
                 new_card.color_known = card.color_known
                 root_hand[idx] = new_card
+        self.last_turn_played = dict.fromkeys(self.hands.keys(), False)
 
     # MCTS
     def play_card(self, player: str, card_idx: int) -> None:
@@ -226,9 +220,8 @@ class MCTSState(GameState):
             card_idx: the index of the card in the player's hand
         """
         card = self.hands[player].pop(card_idx)
-        self.hands[player].append(self.deck.draw())
-        # if player == self.root_player and not card.is_fully_determined():
-        #     self.deck.remove_cards([card])
+        if len(self.deck) > 0:
+            self.hands[player].append(self.deck.draw())
         if self.board[card.color] == card.rank - 1:
             self.board[card.color] += 1
             if card.rank == 5:
@@ -249,9 +242,8 @@ class MCTSState(GameState):
         """
         card = self.hands[player].pop(card_idx)
         self.trash.append(card)
-        self.hands[player].append(self.deck.draw())
-        # if player == self.root_player and not card.is_fully_determined():
-        #     self.deck.remove_cards([card])
+        if len(self.deck) > 0:
+            self.hands[player].append(self.deck.draw())
         self.hints = max(self.hints - 1, 0)
 
     def give_hint(self, destination: str, hint_type: str, hint_value: int) -> None:
@@ -369,6 +361,20 @@ class MCTSState(GameState):
                 table[i][c_idx] += 1
 
         assert np.all(table == full_table), "Consistency failed"
+
+    def game_ended(self) -> tuple[bool, int]:
+        """
+        Checks if the game is ended for some reason. If it's ended, it returns True and the score of the game.
+        If the game isn't ended, it returns False, None
+        """
+        if self.errors == MAX_ERRORS:
+            return True, sum(self.board)
+            # return True, 0
+        if self.board == self.trash.maxima:
+            return True, sum(self.board)
+        if all(self.last_turn_played.values()):
+            return True, sum(self.board)
+        return False, None
 
 
 ### TODO
