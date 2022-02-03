@@ -1,51 +1,9 @@
 import numpy as np
 import copy
-
 from typing import Tuple, List
-
 from game_state import MCTSState
 from game_move import GameMove
 from rules import Rules
-
-NUM_COLUMNS = 7
-COLUMN_HEIGHT = 6
-WINDOW_LENGTH = 4
-FOUR = 4
-
-PLAYER1 = 1
-PLAYER2 = -1
-
-
-class GameMoveOld:
-    """
-    Attribute:
-        player: the (index of) player that made the move
-        sender: string, name of the sender
-        destination: string, name of the destination player
-        action_type: can be "color" or "value"
-        hint_value: can be the color or the value of the card (depending on "action_type")
-        hand_card_ordered: the card in hand that has been played/ discarded
-
-    action_type = "play" uses action_type, sender, hand_card_ordered
-    action_type = "discard" uses action_type, sender, hand_card_ordered
-    action_type = "hint" uses action_type, sender, destination, hint_value
-    """
-
-    def __init__(
-        self,
-        player: int,
-        action_type: str,
-        sender: str,
-        destination: str = None,
-        hand_card_ordered: int = None,
-        hint_value: int = None,
-    ) -> None:
-        self.player = player
-        self.action_type = action_type
-        self.sender = sender
-        self.destination = destination
-        self.hand_card_ordered = hand_card_ordered
-        self.hint_value = hint_value
 
 
 class Model:

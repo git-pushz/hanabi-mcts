@@ -2,9 +2,7 @@ import copy
 import numpy as np
 from enum import IntEnum
 import random
-
 from typing import List
-
 import game
 
 

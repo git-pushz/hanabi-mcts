@@ -1,5 +1,4 @@
-from typing import List, Optional, Any
-
+from typing import List, Any
 import random
 import numpy as np
 from constants import SEED

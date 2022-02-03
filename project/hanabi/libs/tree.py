@@ -1,7 +1,5 @@
 import copy
-
 from typing import List
-
 from model import GameMove
 
 
