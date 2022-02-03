@@ -202,11 +202,11 @@ class MCTSState(GameState):
         self.deck.reserve_semi_determined_cards(root_hand)
         for idx, card in enumerate(root_hand):
             if not card.is_fully_determined():
-                new_card = self.deck.draw2(rank=card.rank, color=card.color)
-                assert new_card.rank is not None and new_card.color is not None
-                new_card.rank_known = card.rank_known
-                new_card.color_known = card.color_known
+                new_card = self.deck.draw(rank=card.rank, color=card.color)
+                assert new_card.rank_known == card.rank_known
+                assert new_card.color_known == card.color_known
                 root_hand[idx] = new_card
+        self.deck.assert_no_reserved_cards()
         self.last_turn_played = dict.fromkeys(self.hands.keys(), False)
         self.assert_consistency()
 
@@ -224,6 +224,7 @@ class MCTSState(GameState):
         """
         card = self.hands[player].pop(card_idx)
         if len(self.deck) > 0:
+            self.deck.assert_no_reserved_cards()
             self.hands[player].append(self.deck.draw())
         if self.board[card.color] == card.rank - 1:
             self.board[card.color] += 1
@@ -248,6 +249,7 @@ class MCTSState(GameState):
         card = self.hands[player].pop(card_idx)
         self.trash.append(card)
         if len(self.deck) > 0:
+            self.deck.assert_no_reserved_cards()
             self.hands[player].append(self.deck.draw())
         self.hints = max(self.hints - 1, 0)
 
@@ -286,10 +288,12 @@ class MCTSState(GameState):
             if not card.is_fully_determined():
                 rank = card.rank if card.rank_known else None
                 color = card.color if card.color_known else None
-                new_card = self.deck.draw2(rank=rank, color=color)
-                new_card.rank_known = card.rank_known
-                new_card.color_known = card.color_known
+                new_card = self.deck.draw(rank=rank, color=color)
+                assert new_card.rank_known == card.rank_known
+                assert new_card.color_known == card.color_known
                 hand[idx] = new_card
+
+        self.deck.assert_no_reserved_cards()
 
     # MCTS
     def restore_hand(self, player_name: str, saved_hand: List[Card]) -> None:
@@ -320,6 +324,7 @@ class MCTSState(GameState):
         """
         for idx in range(len(hand)):
             if hand[idx] is None:
+                self.deck.assert_no_reserved_cards()
                 hand[idx] = self.deck.draw()
 
     # MCTS

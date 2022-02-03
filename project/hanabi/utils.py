@@ -154,11 +154,13 @@ class Deck:
             if not (ignore_fd and card.is_fully_determined()):
                 self._increment(card.rank, card.color)
 
+    def assert_no_reserved_cards(self) -> None:
+        assert not (
+            np.any(self._reserved_ranks != 0) or np.any(self._reserved_colors != 0)
+        )
+
     def reserve_semi_determined_cards(self, cards: List[Card]) -> None:
-        assert np.all(
-            self._reserved_colors == 0
-        ), "Color reservation not reset correctly"
-        assert np.all(self._reserved_ranks == 0), "Rank reservation not reset correctly"
+        self.assert_no_reserved_cards()
         for card in cards:
             if not card.is_fully_determined():
                 if card.rank_known:
@@ -166,38 +168,39 @@ class Deck:
                 elif card.color_known:
                     self._reserved_colors[card.color] += 1
 
-    def draw(self, rank: int = None, color: Color = None) -> Card:
-        if rank is None and color is None:
-            possibilities = [
-                (r, c)
-                for r in range(len(CARD_QUANTITIES))
-                for c in range(len(Color))
-                for _ in range(self._table[r][c])
-            ]
-            rank, color = random.choice(possibilities)
-            rank += 1
-        elif rank is not None:
-            possibilities = [
-                c for c in range(len(Color)) for _ in range(self._table[rank - 1][c])
-            ]
-            color = random.choice(possibilities)
-            assert color is not None
-        elif color is not None:
-            possibilities = [
-                r
-                for r in range(len(CARD_QUANTITIES))
-                for _ in range(self._table[r][color])
-            ]
-            rank = random.choice(possibilities) + 1
-            assert rank is not None
-        self._decrement(rank, color)
-        return Card(rank, color)
+    # def draw(self, rank: int = None, color: Color = None) -> Card:
+    #     if rank is None and color is None:
+    #         possibilities = [
+    #             (r, c)
+    #             for r in range(len(CARD_QUANTITIES))
+    #             for c in range(len(Color))
+    #             for _ in range(self._table[r][c])
+    #         ]
+    #         rank, color = random.choice(possibilities)
+    #         rank += 1
+    #     elif rank is not None:
+    #         possibilities = [
+    #             c for c in range(len(Color)) for _ in range(self._table[rank - 1][c])
+    #         ]
+    #         color = random.choice(possibilities)
+    #         assert color is not None
+    #     elif color is not None:
+    #         possibilities = [
+    #             r
+    #             for r in range(len(CARD_QUANTITIES))
+    #             for _ in range(self._table[r][color])
+    #         ]
+    #         rank = random.choice(possibilities) + 1
+    #         assert rank is not None
+    #     self._decrement(rank, color)
+    #     return Card(rank, color)
 
-    def draw2(self, rank: int = None, color: Color = None) -> Card:
-        # OBS: if rank or color are not None, for sure we are redeterminizing
+    def draw(self, rank: int = None, color: Color = None) -> Card:
+        rank_known = rank is not None
+        color_known = color is not None
 
         # fully determined
-        if rank is not None and color is not None:
+        if rank_known and color_known:
             raise RuntimeError("Cannot specify both rank and color when drawing")
 
         table = np.copy(self._table)
@@ -225,15 +228,10 @@ class Deck:
 
             iterations += 1
             if iterations > max_iterations:
-                print(f"Rank: {rank}")
-                print(f"Color: {color}")
-                print(table)
-                print(f"r_idx: {r_idx}")
-                print(f"c_idx: {c_idx}")
                 raise RuntimeError("Stuck in draw2")
 
         # completely unknown
-        if rank is None and color is None:
+        if not rank_known and not color_known:
             possibilities = [
                 coordinates
                 for coordinates, occurrencies in np.ndenumerate(table)
@@ -242,8 +240,7 @@ class Deck:
             rank, color = random.choice(possibilities)
             rank += 1
 
-        # known rank
-        elif rank is not None:
+        elif rank_known:
             assert (
                 self._reserved_ranks[rank - 1] > 0
             ), f"No card with rank{rank} was previously reserved"
@@ -253,8 +250,7 @@ class Deck:
             ]
             color = random.choice(possibilities)
 
-        # known color
-        elif color is not None:
+        elif color_known:
             assert (
                 self._reserved_colors[color] > 0
             ), f"No card with color {color} was previously reserved"
@@ -266,7 +262,7 @@ class Deck:
 
         assert rank is not None and color is not None
         self._decrement(rank, color)
-        return Card(rank, color)
+        return Card(rank, color, rank_known=rank_known, color_known=color_known)
 
 
 class Trash:
