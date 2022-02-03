@@ -33,7 +33,13 @@ CARD_QUANTITIES = [3, 2, 2, 2, 1]
 
 
 class Card:
-    def __init__(self, rank: int, color: Color) -> None:
+    def __init__(
+        self,
+        rank: int,
+        color: Color,
+        rank_known: bool = False,
+        color_known: bool = False,
+    ) -> None:
         self.rank = rank
         self.color = color
         self.rank_known = False
@@ -59,17 +65,25 @@ class Card:
 
     def reveal_rank(self, rank=None) -> None:
         if rank is None:
-            assert self.rank is not None
+            if self.rank is None:
+                raise RuntimeError("Cannot reveal card's rank: it's None")
         else:
-            assert self.rank is None or self.rank == rank
+            if self.rank is not None and self.rank != rank:
+                raise RuntimeError(
+                    "Cannot reveal card's rank: a different rank is already set"
+                )
             self.rank = rank
         self.rank_known = True
 
     def reveal_color(self, color=None) -> None:
         if color is None:
-            assert self.color is not None
+            if self.color is None:
+                raise RuntimeError("Cannot reveal card's color: it's None")
         else:
-            assert self.color is None or self.color == color
+            if self.color is not None and self.color != color:
+                raise RuntimeError(
+                    "Cannot reveal card's color: a different color is already set"
+                )
             self.color = color
         self.color_known = True
 
