@@ -17,7 +17,7 @@ if [[ $# -eq 2 ]]; then
 	if [[ $2 -lt 1024 ]]; then
 	echo "Ports below 1024 are reserved"
 	else
-	port=$
+	port=$2
 	fi
 fi
 
