@@ -234,8 +234,7 @@ class Rules:
         )
 
         if np.max(probabilities) >= threshold:
-            best_idx = np.argmax(probabilities)
-            return GameMove(player, action_type, card_idx=best_idx)
+            return GameMove(player, action_type, card_idx=np.argmax(probabilities))
         else:
             return None
 
@@ -269,13 +268,13 @@ class Rules:
 
         if np.max(probabilities) >= threshold:
             best_idx = np.argmax(probabilities)
-            return GameMove(player, action_type, card_idx=best_idx)
         elif state.used_hints() > 1:
-            kn_rks = [not c.rank_known for c in hand]
-            if any(kn_rks):
-                best_idx = kn_rks.index(True)
-            else:
-                best_idx = 0
-            return GameMove(player, action_type, card_idx=best_idx)
+            # Choose the oldest card whose rank is unknown (or 0 if all the ranks are known)
+            best_idx = next(
+                (idx for idx, card in enumerate(hand) if not card.rank_known), 0
+            )
         else:
+            # if only 1 or none used hints, prefer a hint over a discard
             return None
+
+        return GameMove(player, action_type, card_idx=best_idx)
