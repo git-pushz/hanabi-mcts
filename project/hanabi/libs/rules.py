@@ -203,11 +203,10 @@ class Rules:
                 return None
             for card in state.hands[destination]:
                 if card.is_semi_determined() and fn_condition(card, state.board):
-                    if not card.rank_known:  # and not card.rank_known
+                    if not card.rank_known:
                         hint_type = "value"
                         hint_value = card.rank
-                    # elif not card.color_known and card.rank_known:
-                    else:
+                    else:  # not card.color_known
                         hint_type = "color"
                         hint_value = card.color
                     return GameMove(
