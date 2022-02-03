@@ -1,9 +1,6 @@
-from typing import Optional
-
-
-MCTS_SIMULATIONS = 80  #
 MCTS_ITERATIONS = 20  #
 MCTS_TIME_BUDGET = 1  #
+MCTS_SIMULATIONS = 80  #
 SCORE_3_ERRORS: float = 0  # NB: SCORE_3_ERRORS MUST BE A FLOAT, WHICH WILL BE MULTIPLIED * sum(board)
 RULE_9_MIN_HINTS = 2
 RULE_9_BEST_IDX_0: bool = False  # NB: if RULE_9_BEST_IDX_0 is False, instead will be used FUR (First Unknown Rank)
