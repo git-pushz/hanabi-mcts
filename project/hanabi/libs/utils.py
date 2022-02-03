@@ -83,6 +83,9 @@ class Card:
     def is_fully_determined(self):
         return self.rank_known and self.color_known
 
+    def is_semi_determined(self):
+        return self.rank_known != self.color_known
+
 
 class Deck:
     def __init__(self) -> None:

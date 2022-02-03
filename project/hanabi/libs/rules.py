@@ -24,15 +24,15 @@ class Rules:
         # RULE 1
         moves.append(Rules._tell_most_information(state, player))
         # RULE 2
-        moves.append(Rules._tell_anyone_about_useful(state, player))
+        moves.append(Rules._tell_anyone(state, player, Rules._is_playable))
         # RULE 3
-        moves.append(Rules._tell_dispensable(state, player))
+        moves.append(Rules._tell_anyone(state, player, Rules._is_discardable))
         # RULE 4
-        moves.append(Rules._complete_tell_playable_card(state, player))
+        moves.append(Rules._complete_tell_anyone(state, player, Rules._is_playable))
         # RULE 5
-        moves.append(Rules._complete_tell_dispensable_card(state, player))
+        moves.append(Rules._complete_tell_anyone(state, player, Rules._is_discardable))
         # RULE 6
-        moves.append(Rules._complete_tell_currently_not_playable_card(state, player))
+        moves.append(Rules._complete_tell_anyone(state, player, Rules._is_unplayable))
         # RULE 7
         moves.append(Rules._play_probably_safe(state, player, 0.7))
         # RULE 8
@@ -57,6 +57,12 @@ class Rules:
     @staticmethod
     def _is_discardable(card: Card, board) -> bool:
         return board[card.color] >= card.rank
+
+    @staticmethod
+    def _is_unplayable(card: Card, board) -> bool:
+        return not (
+            Rules._is_playable(card, board) or Rules._is_discardable(card, board)
+        )
 
     @staticmethod
     def _get_probabilities(
@@ -94,6 +100,8 @@ class Rules:
         if state.hints_available() == 0:
             return None
 
+        action_type = "hint"
+
         best_move = None
         best_affected = -1
         new_information = True
@@ -116,7 +124,11 @@ class Rules:
 
                 if total_affected > best_affected:
                     new_option = GameMove(
-                        player, "hint", destination=p, hint_type="value", hint_value=r
+                        player,
+                        action_type=action_type,
+                        destination=p,
+                        hint_type="value",
+                        hint_value=r,
                     )
                     # TODO: CONVENTIONS?
                     best_affected = total_affected
@@ -132,7 +144,11 @@ class Rules:
 
                 if total_affected > best_affected:
                     new_option = GameMove(
-                        player, "hint", destination=p, hint_type="color", hint_value=c
+                        player,
+                        action_type=action_type,
+                        destination=p,
+                        hint_type="color",
+                        hint_value=c,
                     )
                     # TODO: CONVENTIONS?
                     best_affected = total_affected
@@ -140,179 +156,68 @@ class Rules:
 
         return best_move
 
-    # RULE 2
+    # RULES 2 and 3
     @staticmethod
-    def _tell_anyone_about_useful(state: MCTSState, player: str) -> Optional[GameMove]:
-        action_type = "hint"
-        if state.hints_available() == 0:
-            return None
-        destination = player
-        while True:
-            destination = state.get_next_player_name(destination)
-            if destination == player:
-                return None
-            for idx, card in enumerate(state.hands[destination]):
-                if (
-                    Rules._is_playable(card, state.board)
-                    and not card.is_fully_determined()
-                ):
-                    if not card.rank_known:
-                        hint_type = "value"
-                        hint_value = card.rank
-                    else:
-                        hint_type = "color"
-                        hint_value = card.color
-                    return GameMove(
-                        player,
-                        action_type,
-                        destination=destination,
-                        hint_type=hint_type,
-                        hint_value=hint_value,
-                    )
-
-    # RULE 3
-    @staticmethod
-    def _tell_dispensable(state: MCTSState, player: str) -> Optional[GameMove]:
-        action_type = "hint"
-        if state.hints_available() == 0:
-            return None
-        destination = player
-        while True:
-            destination = state.get_next_player_name(destination)
-            if destination == player:
-                return None
-            for idx, card in enumerate(state.hands[destination]):
-                if (
-                    Rules._is_discardable(card, state.board)
-                    and not card.is_fully_determined()
-                ):
-                    if not card.rank_known:
-                        hint_type = "value"
-                        hint_value = card.rank
-                    else:
-                        hint_type = "color"
-                        hint_value = card.color
-                    return GameMove(
-                        player,
-                        action_type,
-                        destination=destination,
-                        hint_type=hint_type,
-                        hint_value=hint_value,
-                    )
-
-    # RULE 4
-    @staticmethod
-    def _complete_tell_playable_card(
-        state: MCTSState, player: str
+    def _tell_anyone(
+        state: MCTSState, player: str, fn_condition: Callable[[Card, np.ndarray], bool]
     ) -> Optional[GameMove]:
-        action_type = "hint"
         if state.hints_available() == 0:
             return None
-        move = None
+
+        action_type = "hint"
+
         destination = player
         while True:
             destination = state.get_next_player_name(destination)
             if destination == player:
-                break
+                return None
+            for idx, card in enumerate(state.hands[destination]):
+                if fn_condition(card, state.board) and not card.is_fully_determined():
+                    if not card.rank_known:
+                        hint_type = "value"
+                        hint_value = card.rank
+                    else:
+                        hint_type = "color"
+                        hint_value = card.color
+                    return GameMove(
+                        player,
+                        action_type,
+                        destination=destination,
+                        hint_type=hint_type,
+                        hint_value=hint_value,
+                    )
+
+    # RULES 4, 5 and 6
+    @staticmethod
+    def _complete_tell_anyone(
+        state: MCTSState, player: str, fn_condition: Callable[[Card, np.ndarray], bool]
+    ) -> Optional[GameMove]:
+        if state.hints_available() == 0:
+            return None
+
+        action_type = "hint"
+
+        destination = player
+        while True:
+            destination = state.get_next_player_name(destination)
+            if destination == player:
+                return None
             for card in state.hands[destination]:
-                if card.is_fully_determined:
-                    continue
-                if card.rank != state.board[card.color] + 1:
-                    continue
-                if not card.color_known and not card.rank_known:
-                    continue
-                elif card.color_known and not card.rank_known:
-                    hint_type = "value"
-                    hint_value = card.rank
-                # elif not card.color_known and card.rank_known:
-                else:
-                    hint_type = "color"
-                    hint_value = card.color
-                move = GameMove(
-                    player,
-                    action_type,
-                    destination=destination,
-                    hint_type=hint_type,
-                    hint_value=hint_value,
-                )
-                return move
-        return move
-
-    # RULE 5
-    @staticmethod
-    def _complete_tell_dispensable_card(
-        state: MCTSState, player: str
-    ) -> Optional[GameMove]:
-        action_type = "hint"
-        if state.hints_available() == 0:
-            return None
-        move = None
-        destination = player
-        while True:
-            destination = state.get_next_player_name(destination)
-            if destination == player:
-                break
-            for _, card in enumerate(state.hands[destination]):
-                if card.is_fully_determined():
-                    continue
-                if card.rank > state.board[card.color]:
-                    continue
-                if not card.color_known and not card.rank_known:
-                    continue
-                elif not card.color_known and card.rank_known:
-                    hint_type = "color"
-                    hint_value = card.color
-                # elif card.color_known and not card.rank_known:
-                else:
-                    hint_type = "value"
-                    hint_value = card.rank
-                move = GameMove(
-                    player,
-                    action_type,
-                    destination=destination,
-                    hint_type=hint_type,
-                    hint_value=hint_value,
-                )
-                return move
-        return move
-
-    # RULE 6
-    @staticmethod
-    def _complete_tell_currently_not_playable_card(
-        state: MCTSState, player: str
-    ) -> Optional[GameMove]:
-        action_type = "hint"
-        if state.hints_available() == 0:
-            return None
-        move = None
-        destination = player
-        while True:
-            destination = state.get_next_player_name(destination)
-            if destination == player:
-                break
-            for _, card in enumerate(state.hands[destination]):
-                if card.is_fully_determined or card.rank_known:
-                    continue
-                if card.rank <= state.board[card.color] + 1:
-                    continue
-                if not card.color_known and not card.rank_known:
-                    continue
-                elif not card.color_known and card.rank_known:
-                    hint_type = "color"
-                    hint_value = card.color
-                # elif card.color_known and not card.rank_known:
-                else:
-                    hint_type = "value"
-                    hint_value = card.rank
-                move = GameMove(
-                    player,
-                    action_type,
-                    destination=destination,
-                    hint_type=hint_type,
-                    hint_value=hint_value,
-                )
-                return move
-        return move
+                if card.is_semi_determined() and fn_condition(card, state.board):
+                    if not card.rank_known:  # and not card.rank_known
+                        hint_type = "value"
+                        hint_value = card.rank
+                    # elif not card.color_known and card.rank_known:
+                    else:
+                        hint_type = "color"
+                        hint_value = card.color
+                    return GameMove(
+                        player,
+                        action_type,
+                        destination=destination,
+                        hint_type=hint_type,
+                        hint_value=hint_value,
+                    )
 
     # RULE 7
     @staticmethod
@@ -320,6 +225,7 @@ class Rules:
         state: MCTSState, player: str, threshold: float = 0.7
     ) -> Optional[GameMove]:
         action_type = "play"
+
         hand = state.hands[player]
         mental_state = copy.deepcopy(state.deck)
         mental_state.add_cards(hand, ignore_fd=False)
@@ -349,9 +255,11 @@ class Rules:
     def _discard_probably_useless(
         state: MCTSState, player: str, threshold: float
     ) -> Optional[GameMove]:
-        action_type = "discard"
         if state.hints == 0:
             return None
+
+        action_type = "discard"
+
         hand = state.hands[player]
         mental_state = copy.deepcopy(state.deck)
         mental_state.add_cards(hand, ignore_fd=False)
@@ -362,7 +270,8 @@ class Rules:
 
         if np.max(probabilities) >= threshold:
             best_idx = np.argmax(probabilities)
+            return GameMove(player, action_type, card_idx=best_idx)
+        elif state.hints >= 4:
+            return GameMove(player, action_type, card_idx=0)
         else:
-            best_idx = 0
-
-        return GameMove(player, action_type, card_idx=best_idx)
+            return None
