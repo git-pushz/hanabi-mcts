@@ -4,7 +4,12 @@ from game_state import MCTSState
 from game_move import GameMove
 from utils import Card, Color, CARD_QUANTITIES, Deck
 import numpy as np
-from hyperparameters import PLAY_SAFE_PROBABILITY, PLAY_SAFE_LATE_PROBABILITY, DISCARD_PROBABILITY, RULE_9_BEST_IDX
+from hyperparameters import (
+    PLAY_SAFE_PROBABILITY,
+    PLAY_SAFE_LATE_PROBABILITY,
+    DISCARD_PROBABILITY,
+    RULE_9_BEST_IDX_0,
+)
 
 
 class Rules:
@@ -42,9 +47,14 @@ class Rules:
         # p = highest + len(state.deck)*(lowest-highest/50)
         moves.append(Rules._play_probably_safe(state, player, PLAY_SAFE_PROBABILITY))
         # RULE 8
-        moves.append(Rules._play_probably_safe_late(state, player, PLAY_SAFE_LATE_PROBABILITY))
+        moves.append(
+            Rules._play_probably_safe_late(state, player, PLAY_SAFE_LATE_PROBABILITY)
+        )
         # RULE 9
-        moves.append(Rules._discard_probably_useless(state, player, DISCARD_PROBABILITY))
+        moves.append(
+            Rules._discard_probably_useless(state, player, DISCARD_PROBABILITY)
+        )
+        moves.append(Rules._discard_duplicate(state, player))
         return [m for m in moves if m is not None]
 
     @staticmethod
@@ -290,8 +300,6 @@ class Rules:
                 best_idx = next(
                     (idx for idx, card in enumerate(hand) if not card.rank_known), 0
                 )
-            else:
-                best_idx = 0
         else:
             # if only 1 or none used hints, prefer a hint over a discard
             return None
