@@ -97,7 +97,7 @@ class Rules:
     # RULE 1
     @staticmethod
     def _tell_most_information(state: MCTSState, player: str) -> Optional[GameMove]:
-        if state.hints_available() == 0:
+        if state.available_hints() == 0:
             return None
 
         action_type = "hint"
@@ -154,6 +154,7 @@ class Rules:
                     best_affected = total_affected
                     best_move = new_option
 
+        assert best_move is not None
         return best_move
 
     # RULES 2 and 3
@@ -161,7 +162,7 @@ class Rules:
     def _tell_anyone(
         state: MCTSState, player: str, fn_condition: Callable[[Card, np.ndarray], bool]
     ) -> Optional[GameMove]:
-        if state.hints_available() == 0:
+        if state.available_hints() == 0:
             return None
 
         action_type = "hint"
@@ -192,7 +193,7 @@ class Rules:
     def _complete_tell_anyone(
         state: MCTSState, player: str, fn_condition: Callable[[Card, np.ndarray], bool]
     ) -> Optional[GameMove]:
-        if state.hints_available() == 0:
+        if state.available_hints() == 0:
             return None
 
         action_type = "hint"
@@ -255,7 +256,7 @@ class Rules:
     def _discard_probably_useless(
         state: MCTSState, player: str, threshold: float
     ) -> Optional[GameMove]:
-        if state.hints == 0:
+        if state.used_hints() == 0:
             return None
 
         action_type = "discard"
@@ -271,7 +272,7 @@ class Rules:
         if np.max(probabilities) >= threshold:
             best_idx = np.argmax(probabilities)
             return GameMove(player, action_type, card_idx=best_idx)
-        elif state.hints >= 4:
+        elif state.used_hints() >= 2:
             return GameMove(player, action_type, card_idx=0)
         else:
             return None

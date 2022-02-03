@@ -148,8 +148,7 @@ class GameState:
                 self.hints -= 1
         else:
             self.trash.append(card)
-            if self.errors >= MAX_ERRORS:
-                raise RuntimeError("Max number of error tokens already reached")
+            assert self.errors < MAX_ERRORS
             self.errors += 1
 
     def card_drawn(self, player: str, card: Card) -> None:
@@ -167,6 +166,7 @@ class GameState:
         self, destination: str, cards_idx: List[int], hint_type: str, hint_value: int
     ) -> None:
         """ """
+        assert self.hints < MAX_HINTS
         hand = self.hands[destination]
         for idx in cards_idx:
             card = hand[idx]
@@ -227,8 +227,8 @@ class MCTSState(GameState):
             self.hands[player].append(self.deck.draw())
         if self.board[card.color] == card.rank - 1:
             self.board[card.color] += 1
-            if card.rank == 5:
-                self.hints = max(self.hints - 1, 0)
+            if card.rank == 5 and self.hints > 0:
+                self.hints -= 1
         else:
             self.trash.append(card)
             self.errors += 1
@@ -243,17 +243,21 @@ class MCTSState(GameState):
             player: the name of the player
             card_idx: the index of the card in the player's hand
         """
+        if self.hints == 0:
+            raise RuntimeError("No used hint tokens")
         card = self.hands[player].pop(card_idx)
         self.trash.append(card)
         if len(self.deck) > 0:
             self.hands[player].append(self.deck.draw())
-        self.hints = max(self.hints - 1, 0)
+        self.hints -= 1
 
     def give_hint(self, destination: str, hint_type: str, hint_value: int) -> None:
         """
         This works asssuming that all the cards in all the players' hands have a defined rank and color
         (either known or not)
         """
+        if self.hints == MAX_HINTS:
+            raise RuntimeError("Maximum number of hints already reached")
         hand = self.hands[destination]
         for card in hand:
             if hint_type == "value" and card.rank == hint_value:
@@ -263,8 +267,12 @@ class MCTSState(GameState):
         self.hints += 1
 
     # MCTS
-    def hints_available(self) -> int:
+    def available_hints(self) -> int:
         return MAX_HINTS - self.hints
+
+    # MCTS
+    def used_hints(self) -> int:
+        return self.hints
 
     def redeterminize_hand(self, player_name: str) -> None:
         hand = self.hands[player_name]
@@ -367,7 +375,7 @@ class MCTSState(GameState):
         If the game isn't ended, it returns False, None
         """
         if self.errors == MAX_ERRORS:
-            return True, sum(self.board) // 2
+            return True, sum(self.board) // 3
             # return True, 0
         # if self.board == self.trash.maxima:
         if np.all(self.board == 5):

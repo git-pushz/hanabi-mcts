@@ -103,12 +103,12 @@ class Model:
             # if card.rank_known or (card.color_known and self.state.board[card.color] == card.rank - 1):
             if card.rank_known:
                 actions.append("play")
-            if self.state.hints > 0:
+            if self.state.used_hints() > 0:
                 actions.append("discard")
             for action in actions:
                 moves.append(GameMove(this_player, action, card_idx=idx))
 
-        if self.state.hints_available() > 0:
+        if self.state.available_hints() > 0:
             action_type = "hint"
             for player in self.state.players:
                 if player == this_player:
@@ -157,8 +157,10 @@ class Model:
         if move.action_type == "play":
             self.state.play_card(move.player, move.card_idx)
         elif move.action_type == "discard":
+            assert self.state.used_hints() > 0
             self.state.discard_card(move.player, move.card_idx)
         elif move.action_type == "hint":
+            assert self.state.available_hints() > 0
             self.state.give_hint(move.destination, move.hint_type, move.hint_value)
         else:
             raise RuntimeError(f"Unknown action type: {move.action_type}")
