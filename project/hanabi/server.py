@@ -171,6 +171,6 @@ if __name__ == '__main__':
     if len(sys.argv) > 1:
         if int(sys.argv[1]) > 1:
             numPlayers = int(sys.argv[1])
-        if int(sys.argv[2]) >= 1024:
+        if len(sys.argv) >= 2 and int(sys.argv[2]) >= 1024:
             port = int(sys.argv[2])
     start_server(numPlayers, port)
