@@ -44,7 +44,7 @@ class Card:
         if type(other) is not Card and type(other) is not game.Card:
             raise TypeError(f"Cannot compare type card with {type(other)}")
         if hasattr(other, "rank"):
-            return self.rank == other.rank and self.color == color_str2enum[other.color]
+            return self.rank == other.rank and self.color == other.color
         elif hasattr(other, "value"):
             return (
                 self.rank == other.value and self.color == color_str2enum[other.color]
