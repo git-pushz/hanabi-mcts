@@ -106,13 +106,13 @@ class Rules:
         best_affected = -1
         new_information = True
 
-        p = player
+        destination = player
         while True:
-            p = state.get_next_player_name(p)
-            if p == player:
+            destination = state.get_next_player_name(destination)
+            if destination == player:
                 break
 
-            hand = state.hands[p]
+            hand = state.hands[destination]
 
             for r in range(1, 6):
                 total_affected = 0
@@ -126,7 +126,7 @@ class Rules:
                     new_option = GameMove(
                         player,
                         action_type=action_type,
-                        destination=p,
+                        destination=destination,
                         hint_type="value",
                         hint_value=r,
                     )
@@ -146,7 +146,7 @@ class Rules:
                     new_option = GameMove(
                         player,
                         action_type=action_type,
-                        destination=p,
+                        destination=destination,
                         hint_type="color",
                         hint_value=c,
                     )
