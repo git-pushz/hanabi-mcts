@@ -142,11 +142,11 @@ def manageInput():
             os._exit(0)
 
 
-def manageNetwork():
+def manageNetwork(server_port):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         s.bind((HOST, PORT))
-        logging.info("Hanabi server started on " + HOST + ":" + str(PORT))
+        logging.info("Hanabi server started on " + HOST + ":" + str(server_port))
         while True:
             s.listen()
             conn, addr = s.accept()
@@ -154,21 +154,23 @@ def manageNetwork():
                              args=(conn, addr)).start()
 
 
-def start_server(nplayers):
+def start_server(nplayers, server_port):
     global numPlayers
     numPlayers = nplayers
     logging.basicConfig(filename="game.log", level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s',
                         datefmt="%m/%d/%Y %I:%M:%S %p")
     logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
-    threading.Thread(target=manageNetwork).start()
+    threading.Thread(target=manageNetwork, args=(server_port,)).start()
     manageInput()
 
 
 if __name__ == '__main__':
     signal(SIGPIPE, SIG_DFL)
     print("Type 'exit' to end the program")
+    port = PORT
     if len(sys.argv) > 1:
         if int(sys.argv[1]) > 1:
             numPlayers = int(sys.argv[1])
-
-    start_server(numPlayers)
+        if int(sys.argv[2]) >= 1024:
+            port = int(sys.argv[2])
+    start_server(numPlayers, port)
