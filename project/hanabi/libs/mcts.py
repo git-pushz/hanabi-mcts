@@ -9,7 +9,7 @@ import numpy as np
 import random
 
 DEBUG = False
-SIMULATIONS_NUMBER = 30
+SIMULATIONS_NUMBER = 100
 
 
 def find(pred, iterable):

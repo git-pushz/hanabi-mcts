@@ -116,7 +116,7 @@ class Model:
         if move.action_type == "play":
             self.state.play_card(move.player, move.card_idx)
         elif move.action_type == "discard":
-            assert self.state.used_hints() > 0
+            assert self.state.used_hints() > 0, f"Move: {move}"
             self.state.discard_card(move.player, move.card_idx)
         elif move.action_type == "hint":
             assert self.state.available_hints() > 0

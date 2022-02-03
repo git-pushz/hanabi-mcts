@@ -1,6 +1,6 @@
 import copy
 import numpy as np
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 import GameData
 
 from utils import (
@@ -369,7 +369,7 @@ class MCTSState(GameState):
 
         assert np.all(table == full_table), "Consistency failed"
 
-    def game_ended(self) -> Tuple[bool, int]:
+    def game_ended(self) -> Tuple[bool, Optional[int]]:
         """
         Checks if the game is ended for some reason. If it's ended, it returns True and the score of the game.
         If the game isn't ended, it returns False, None
