@@ -2,8 +2,10 @@ import os
 import GameData
 import socket
 from game import Game
+from game import Player
 import threading
 from constants import *
+from signal import signal, SIGPIPE, SIG_DFL
 import logging
 import sys
 
@@ -11,6 +13,8 @@ mutex = threading.Lock()
 # SERVER
 playerConnections = {}
 game = Game()
+
+mutex = threading.Lock()
 
 playersOk = []
 
@@ -34,7 +38,9 @@ def manageConnection(conn: socket, addr):
         while keepActive:
             print("SERVER WAITING")
             data = conn.recv(DATASIZE)
+
             mutex.acquire(True)
+
             if not data:
                 del playerConnections[playerName]
                 logging.warning("Player disconnected: " + playerName)
@@ -44,15 +50,19 @@ def manageConnection(conn: socket, addr):
                     os._exit(0)
                 keepActive = False
             else:
-                print(f"SERVER PROCESSING {GameData.GameData.deserialize(data)}")
+                print(
+                    f"SERVER PROCESSING {GameData.GameData.deserialize(data)}")
                 data = GameData.GameData.deserialize(data)
                 print(f"SERVER RECEIVED {type(data)} from {data.sender}")
                 if status == "Lobby":
                     if type(data) is GameData.ClientPlayerAddData:
                         playerName = data.sender
                         commandQueue[playerName] = []
-                        if playerName in playerConnections.keys():
-                            conn.send(GameData.ServerActionInvalid("Player already registered."))
+                        if playerName in playerConnections.keys() or playerName == "" and playerName is None:
+                            logging.warning("Duplicate player: " + playerName)
+                            conn.send(GameData.ServerActionInvalid(
+                                "Player with that name already registered.").serialize())
+                            mutex.release()
                             return
                         playerConnections[playerName] = (conn, addr)
                         logging.info("Player connected: " + playerName)
@@ -60,13 +70,11 @@ def manageConnection(conn: socket, addr):
                         conn.send(GameData.ServerPlayerConnectionOk(
                             playerName).serialize())
                     elif type(data) is GameData.ClientPlayerStartRequest:
-                        if playerName not in game.getPlayers() and playerName != "" and playerName is not None:
-                            game.setPlayerReady(playerName)
-                            logging.info("Player ready: " + playerName)
-                            conn.send(GameData.ServerPlayerStartRequestAccepted(len(game.getPlayers()),
-                                                                                game.getNumReadyPlayers()).serialize())
-                        else:
-                            return
+                        game.setPlayerReady(playerName)
+                        logging.info("Player ready: " + playerName)
+                        conn.send(GameData.ServerPlayerStartRequestAccepted(
+                            len(game.getPlayers()), game.getNumReadyPlayers()).serialize())
+
                         if len(game.getPlayers()) == game.getNumReadyPlayers() and len(game.getPlayers()) >= numPlayers:
                             listNames = []
                             for player in game.getPlayers():
@@ -77,6 +85,7 @@ def manageConnection(conn: socket, addr):
                                 playerConnections[player][0].send(
                                     GameData.ServerStartGameData(listNames).serialize())
                             game.start()
+
                     # This ensures every player is ready to send requests
                     elif type(data) is GameData.ClientPlayerReadyData:
                         playersOk.append(1)
@@ -135,6 +144,7 @@ def manageInput():
 
 def manageNetwork():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         s.bind((HOST, PORT))
         logging.info("Hanabi server started on " + HOST + ":" + str(PORT))
         while True:
@@ -155,6 +165,7 @@ def start_server(nplayers):
 
 
 if __name__ == '__main__':
+    signal(SIGPIPE, SIG_DFL)
     print("Type 'exit' to end the program")
     if len(sys.argv) > 1:
         if int(sys.argv[1]) > 1:
