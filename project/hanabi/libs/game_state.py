@@ -347,7 +347,7 @@ class MCTSState(GameState):
             if quantity > CARD_QUANTITIES[card.rank - 1]:
                 cards[idx] = None
 
-    def assert_consistency(self):
+    def assert_consistency(self) -> None:
         col = np.array(CARD_QUANTITIES)
         col = col.reshape(col.size, 1)
         full_table = np.tile(col, len(Color))

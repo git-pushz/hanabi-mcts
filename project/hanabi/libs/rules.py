@@ -42,7 +42,7 @@ class Rules:
         return [m for m in moves if m is not None]
 
     @staticmethod
-    def _all_equal(iterator):
+    def _all_equal(iterator) -> bool:
         iterator = iter(iterator)
         try:
             first = next(iterator)
@@ -70,7 +70,7 @@ class Rules:
         mental_state: np.ndarray,
         fn_condition: Callable[[Card, np.ndarray], bool],
         board: np.ndarray,
-    ):
+    ) -> np.ndarray:
         probabilities = np.empty(len(hand), dtype=np.float)
 
         for idx, card in enumerate(hand):
@@ -245,7 +245,7 @@ class Rules:
     @staticmethod
     def _play_probably_safe_late(
         state: MCTSState, player: str, threshold: float = 0.4
-    ) -> GameMove:
+    ) -> Optional[GameMove]:
         move = None
         if len(state.deck) <= 5:
             move = Rules._play_probably_safe(state, player, threshold)
@@ -272,7 +272,7 @@ class Rules:
         if np.max(probabilities) >= threshold:
             best_idx = np.argmax(probabilities)
             return GameMove(player, action_type, card_idx=best_idx)
-        elif state.used_hints() >= 2:
+        elif state.used_hints() > 1:
             return GameMove(player, action_type, card_idx=0)
         else:
             return None

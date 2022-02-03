@@ -62,7 +62,7 @@ class Card:
         color = color_enum2str[self.color] if self.color is not None else ""
         return f"Card ({rank},{color})"
 
-    def reveal_rank(self, rank=None):
+    def reveal_rank(self, rank=None) -> None:
         if rank is None:
             assert self.rank is not None
         else:
@@ -70,7 +70,7 @@ class Card:
             self.rank = rank
         self.rank_known = True
 
-    def reveal_color(self, color=None):
+    def reveal_color(self, color=None) -> None:
         if color is None:
             assert self.color is not None
         else:
@@ -78,10 +78,10 @@ class Card:
             self.color = color
         self.color_known = True
 
-    def is_fully_determined(self):
+    def is_fully_determined(self) -> bool:
         return self.rank_known and self.color_known
 
-    def is_semi_determined(self):
+    def is_semi_determined(self) -> bool:
         return self.rank_known != self.color_known
 
 
@@ -293,5 +293,5 @@ class Trash:
         self.list.append(card)
         self._decrement(card.rank, card.color)
 
-    def get_table(self):
+    def get_table(self) -> np.ndarray:
         return self._table

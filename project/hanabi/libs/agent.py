@@ -18,7 +18,7 @@ MOVE_TIME_BUDGET = 3
 class Agent:
     def __init__(
         self, name: str, data: GameData.ServerGameStateData, players_names: list
-    ):
+    ) -> None:
         self.name = name
         self._game_state = GameState(players_names, name, data)
         self.turn = 0
@@ -163,10 +163,3 @@ class Agent:
         s += f"Errors made: {self._game_state.errors}\n"
         s += f"Deck table: {str(self._game_state.deck)}\n"
         return s
-
-
-# TODO
-# * Gestire le ultime giocate (quando il mazzo si svuota), sia nella partita "reale" che nelle simulazioni MC
-#   * Dedurre le ultime carte non determinate della mano / del mazzo
-# * Gestire l'ultimo giro a 4 carte (se il server lo richiede)
-# * Implementare le 9 regole per ridurre il branching factor nel MCTS
