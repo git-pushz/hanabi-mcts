@@ -8,6 +8,7 @@ from hyperparameters import (
     PLAY_SAFE_PROBABILITY,
     PLAY_SAFE_LATE_PROBABILITY,
     DISCARD_PROBABILITY,
+    RULE_9_MIN_HINTS,
     RULE_9_BEST_IDX_0,
 )
 
@@ -291,7 +292,7 @@ class Rules:
 
         if np.max(probabilities) >= threshold:
             best_idx = np.argmax(probabilities)
-        elif state.used_hints() >= 2:
+        elif state.used_hints() >= RULE_9_MIN_HINTS:
             # Choose the oldest card whose rank is unknown (or 0 if all the ranks are known)
             if RULE_9_BEST_IDX_0:
                 best_idx = 0
