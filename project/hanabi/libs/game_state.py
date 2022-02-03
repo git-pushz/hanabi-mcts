@@ -2,6 +2,7 @@ import copy
 import numpy as np
 from typing import List, Tuple, Optional
 import GameData
+from hyperparameters import SCORE_3_ERRORS
 
 from utils import (
     CARD_QUANTITIES,
@@ -368,21 +369,26 @@ class MCTSState(GameState):
 
         assert np.all(table == full_table), "Consistency failed"
 
-    def game_ended(self) -> Tuple[bool, Optional[int]]:
+    def game_ended(self) -> Tuple[bool, Optional[float]]:
         """
         Checks if the game is ended for some reason. If it's ended, it returns True and the score of the game.
         If the game isn't ended, it returns False, None
         """
         if self.errors == MAX_ERRORS:
-            return True, sum(self.board) // 2
-            # return True, 0
+            return True, self.eval_final_state() * SCORE_3_ERRORS
         # if self.board == self.trash.maxima:
         if np.all(self.board == 5):
-            return True, sum(self.board)
+            return True, self.eval_final_state()
         if all(self.last_turn_played.values()):
-            return True, sum(self.board)
+            return True, self.eval_final_state()
         return False, None
 
-
-### TODO
-# * to_string per la classe Tree
+    def eval_final_state(self, alpha: float = 0.1, beta: float = 1) -> float:
+        base_points = sum(self.board)
+        ratios = [c.rank for c in self.trash.list]
+        rank_ratios = {r: ratios.count(r)/(CARD_QUANTITIES[r-1]*len(Color)) for r in range(1, 6)}
+        five_count = rank_ratios[5]
+        zero_count = self.board.count(0)
+        # return base_points - five_count * alpha - zero_count * beta
+        coeff = base_points // 10 + 1
+        return base_points

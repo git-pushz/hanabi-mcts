@@ -4,6 +4,7 @@ from game_state import MCTSState
 from game_move import GameMove
 from utils import Card, Color, CARD_QUANTITIES, Deck
 import numpy as np
+from hyperparameters import PLAY_SAFE_PROBABILITY, PLAY_SAFE_LATE_PROBABILITY, DISCARD_PROBABILITY, RULE_9_BEST_IDX
 
 
 class Rules:
@@ -34,11 +35,16 @@ class Rules:
         # RULE 6
         moves.append(Rules._complete_tell_anyone(state, player, Rules._is_unplayable))
         # RULE 7
-        moves.append(Rules._play_probably_safe(state, player, 0.7))
+        # # probability p ∈ [0.4, 0.8]
+        # highest = 0.8
+        # lowest = 0.4
+        # # p = highest + len(deck)*(lowest-highest)/50  NB: 50 is the max length of deck
+        # p = highest + len(state.deck)*(lowest-highest/50)
+        moves.append(Rules._play_probably_safe(state, player, PLAY_SAFE_PROBABILITY))
         # RULE 8
-        moves.append(Rules._play_probably_safe_late(state, player, 0.4))
+        moves.append(Rules._play_probably_safe_late(state, player, PLAY_SAFE_LATE_PROBABILITY))
         # RULE 9
-        moves.append(Rules._discard_probably_useless(state, player, 0.7))
+        moves.append(Rules._discard_probably_useless(state, player, DISCARD_PROBABILITY))
         return [m for m in moves if m is not None]
 
     @staticmethod
@@ -267,11 +273,14 @@ class Rules:
 
         if np.max(probabilities) >= threshold:
             best_idx = np.argmax(probabilities)
-        elif state.used_hints() > 1:
+        elif state.used_hints() >= 2:
             # Choose the oldest card whose rank is unknown (or 0 if all the ranks are known)
-            best_idx = next(
-                (idx for idx, card in enumerate(hand) if not card.rank_known), 0
-            )
+            if RULE_9_BEST_IDX is None:
+                best_idx = next(
+                    (idx for idx, card in enumerate(hand) if not card.rank_known), 0
+                )
+            else:
+                best_idx = 0
         else:
             # if only 1 or none used hints, prefer a hint over a discard
             return None

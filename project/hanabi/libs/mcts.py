@@ -7,9 +7,9 @@ from tree import Tree, Node, GameNode
 from functools import reduce
 import numpy as np
 import random
+from hyperparameters import MCTS_SIMULATIONS
 
 DEBUG = False
-SIMULATIONS_NUMBER = 100
 
 
 def find(pred, iterable):
@@ -70,9 +70,9 @@ class MCTS:
 
         ## added
         simulation_score = 0
-        for _ in range(SIMULATIONS_NUMBER):
+        for _ in range(MCTS_SIMULATIONS):
             simulation_score += self._simulate(expand_leaf, copy.deepcopy(expand_model))
-        simulation_score /= SIMULATIONS_NUMBER
+        simulation_score /= MCTS_SIMULATIONS
         self._backpropagate(expand_leaf, simulation_score)
         if DEBUG:
             print(

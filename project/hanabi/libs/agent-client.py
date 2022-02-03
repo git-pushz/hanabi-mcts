@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import signal
 from sys import argv, stdout
 from threading import Thread, Condition
 import GameData
@@ -272,3 +273,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    # os.kill(os.getppid(), signal.SIGHUP)
