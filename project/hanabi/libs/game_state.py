@@ -201,7 +201,6 @@ class MCTSState(GameState):
         self.deck.reserve_semi_determined_cards(root_hand)
         for idx, card in enumerate(root_hand):
             if not card.is_fully_determined():
-                # TODO DRAW SHOULDN'T FAIL HERE
                 new_card = self.deck.draw2(rank=card.rank, color=card.color)
                 assert new_card.rank is not None and new_card.color is not None
                 new_card.rank_known = card.rank_known
@@ -243,28 +242,28 @@ class MCTSState(GameState):
             player: the name of the player
             card_idx: the index of the card in the player's hand
         """
-        if self.hints == 0:
-            raise RuntimeError("No used hint tokens")
+        # if self.hints == 0:
+        #     raise RuntimeError("No used hint tokens")
         card = self.hands[player].pop(card_idx)
         self.trash.append(card)
         if len(self.deck) > 0:
             self.hands[player].append(self.deck.draw())
-        self.hints -= 1
+        self.hints = max(self.hints - 1, 0)
 
     def give_hint(self, destination: str, hint_type: str, hint_value: int) -> None:
         """
         This works asssuming that all the cards in all the players' hands have a defined rank and color
         (either known or not)
         """
-        if self.hints == MAX_HINTS:
-            raise RuntimeError("Maximum number of hints already reached")
+        # if self.hints == MAX_HINTS:
+        #     raise RuntimeError("Maximum number of hints already reached")
         hand = self.hands[destination]
         for card in hand:
             if hint_type == "value" and card.rank == hint_value:
                 card.reveal_rank()
             elif hint_type == "color" and card.color == hint_value:
                 card.reveal_color()
-        self.hints += 1
+        self.hints = min(self.hints + 1, MAX_HINTS)
 
     # MCTS
     def available_hints(self) -> int:
