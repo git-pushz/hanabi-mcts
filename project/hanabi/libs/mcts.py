@@ -29,14 +29,22 @@ class MCTS:
         self.tree = Tree(root)
 
     def run_search(self, time_budget: int = None, iterations: int = None) -> GameMove:
-        if (iterations is None) == (time_budget is None):
+        if (iterations is None) and (time_budget is None):
             raise RuntimeError(
-                "Exactly one between iterations and time_budget must be specified"
+                "At least one between iterations and time_budget must be specified"
             )
 
         # each iteration represents the select, expand, simulate, backpropagate iteration
 
-        if time_budget is not None:
+        if time_budget is not None and iterations is not None:
+            elapsed_time = 0
+            start_time = time.time()
+            n_iterations = 0
+            while elapsed_time < time_budget or n_iterations < iterations:
+                self._run_search_iteration()
+                elapsed_time = time.time() - start_time
+                n_iterations += 1
+        elif time_budget is not None:
             elapsed_time = 0
             start_time = time.time()
             while elapsed_time < time_budget:

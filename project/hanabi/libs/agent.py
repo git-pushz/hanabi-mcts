@@ -22,6 +22,7 @@ class Agent:
         self.name = name
         self._game_state = GameState(players_names, name, data)
         self.turn = 0
+        self.hand_size = 5 if len(players_names) < 4 else 4
         if SEED is not None:
             np.random.seed(SEED)
             random.seed(SEED)
@@ -31,7 +32,8 @@ class Agent:
         self.turn += 1
         mcts = MCTS(self._game_state, self.name)
         # move = mcts.run_search(iterations=MCTS_ITERATIONS)
-        move = mcts.run_search(time_budget=MOVE_TIME_BUDGET)
+        # move = mcts.run_search(time_budget=MOVE_TIME_BUDGET)
+        move = mcts.run_search(time_budget=MOVE_TIME_BUDGET, iterations=MCTS_ITERATIONS)
         if move.action_type == "hint":
             hint_value = (
                 move.hint_value

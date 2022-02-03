@@ -5,7 +5,6 @@ import GameData
 import socket
 from constants import *
 from agent import Agent, DEBUG, VERBOSE, LOG
-from game_state import HAND_SIZE
 import os
 import traceback
 
@@ -185,7 +184,7 @@ def main():
                 agent.track_discarded_card(data.lastPlayer, data.cardHandIndex)
 
                 check_turn_and_new_cards(
-                    agent, data.handLength == HAND_SIZE, data.lastPlayer, data.player
+                    agent, data.handLength == agent.hand_size, data.lastPlayer, data.player
                 )
 
             # 6 received when one player plays a card correctly
@@ -201,7 +200,7 @@ def main():
                 )
 
                 check_turn_and_new_cards(
-                    agent, data.handLength == HAND_SIZE, data.lastPlayer, data.player
+                    agent, data.handLength == agent.hand_size, data.lastPlayer, data.player
                 )
 
             # 7 received when one player makes a mistake
@@ -217,7 +216,7 @@ def main():
                 )
 
                 check_turn_and_new_cards(
-                    agent, data.handLength == HAND_SIZE, data.lastPlayer, data.player
+                    agent, data.handLength == agent.hand_size, data.lastPlayer, data.player
                 )
 
             # 8 received when one player hints another player
