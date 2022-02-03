@@ -124,10 +124,10 @@ class Model:
         if move.action_type == "play":
             self.state.play_card(move.player, move.card_idx)
         elif move.action_type == "discard":
-            assert self.state.used_hints() > 0, f"Move: {move}"
+            # assert self.state.used_hints() > 0
             self.state.discard_card(move.player, move.card_idx)
         elif move.action_type == "hint":
-            assert self.state.available_hints() > 0
+            # assert self.state.available_hints() > 0
             self.state.give_hint(move.destination, move.hint_type, move.hint_value)
         else:
             raise RuntimeError(f"Unknown action type: {move.action_type}")
