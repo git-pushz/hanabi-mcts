@@ -54,7 +54,6 @@ class Rules:
         moves.append(
             Rules._discard_probably_useless(state, player, DISCARD_PROBABILITY)
         )
-        moves.append(Rules._discard_duplicate(state, player))
         return [m for m in moves if m is not None]
 
     @staticmethod
