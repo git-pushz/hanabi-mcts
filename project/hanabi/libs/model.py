@@ -60,8 +60,16 @@ class Model:
         for idx, card in enumerate(hand):
             actions = []
             # if card.rank_known or (card.color_known and self.state.board[card.color] == card.rank - 1):
-            # if card.rank_known:
-            actions.append("play")
+            if (
+                # (self.state.errors == 0 and card.is_semi_determined())
+                (self.state.errors <= 1 and card.rank_known)
+                or (
+                    self.state.errors == 2
+                    and card.is_fully_determined()
+                    and self.state.board[card.color] + 1 == card.rank  # playable
+                )
+            ):
+                actions.append("play")
             if self.state.used_hints() > 0:
                 actions.append("discard")
             for action in actions:
