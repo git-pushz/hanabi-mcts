@@ -117,7 +117,6 @@ class Rules:
             for rank in range(1, 1 + len(CARD_QUANTITIES)):
                 total_affected = 0
                 for card in hand:
-                    # TODO: JAVA: hand.hasCard
                     if not new_information or not card.rank_known:
                         if card.rank == rank:
                             total_affected += 1
@@ -137,7 +136,6 @@ class Rules:
             for color in range(len(Color)):
                 total_affected = 0
                 for card in hand:
-                    # TODO: JAVA: hand.hasCard
                     if not new_information or not card.color_known:
                         if card.color == color:
                             total_affected += 1
@@ -273,6 +271,11 @@ class Rules:
             best_idx = np.argmax(probabilities)
             return GameMove(player, action_type, card_idx=best_idx)
         elif state.used_hints() > 1:
-            return GameMove(player, action_type, card_idx=0)
+            kn_rks = [not c.rank_known for c in hand]
+            if any(kn_rks):
+                best_idx = kn_rks.index(True)
+            else:
+                best_idx = 0
+            return GameMove(player, action_type, card_idx=best_idx)
         else:
             return None
