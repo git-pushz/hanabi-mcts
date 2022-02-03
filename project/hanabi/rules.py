@@ -275,7 +275,9 @@ class Rules:
             best_idx = np.argmax(probabilities)
         elif state.used_hints() >= 2:
             # Choose the oldest card whose rank is unknown (or 0 if all the ranks are known)
-            if RULE_9_BEST_IDX is None:
+            if RULE_9_BEST_IDX_0:
+                best_idx = 0
+            else:
                 best_idx = next(
                     (idx for idx, card in enumerate(hand) if not card.rank_known), 0
                 )
