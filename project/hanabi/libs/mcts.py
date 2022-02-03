@@ -1,7 +1,5 @@
 import copy
-
 from typing import Tuple, List
-
 import time
 from model import Model, GameMove
 from game_state import GameState, MCTSState
