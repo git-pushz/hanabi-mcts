@@ -386,7 +386,10 @@ class MCTSState(GameState):
     def eval_final_state(self, alpha: float = 0.1, beta: float = 1) -> float:
         base_points = sum(self.board)
         ratios = [c.rank for c in self.trash.list]
-        rank_ratios = {r: ratios.count(r)/(CARD_QUANTITIES[r-1]*len(Color)) for r in range(1, 6)}
+        rank_ratios = {
+            r: ratios.count(r) / (CARD_QUANTITIES[r - 1] * len(Color))
+            for r in range(1, 1 + len(CARD_QUANTITIES))
+        }
         five_count = rank_ratios[5]
         zero_count = self.board.count(0)
         # return base_points - five_count * alpha - zero_count * beta
