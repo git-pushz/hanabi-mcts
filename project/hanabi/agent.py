@@ -84,9 +84,7 @@ class Agent:
         assert new_card is not None, "new card not found"
         assert different_hands == 1, "too many different cards"
         assert player != self.name, "Cannot discover my cards"
-        self._game_state.card_drawn(
-            player, Card(new_card.value, color_str2enum[new_card.color])
-        )
+        self._game_state.card_drawn(player, Card.from_server(new_card))
 
     def draw_card(self) -> None:
         """
@@ -134,8 +132,8 @@ class Agent:
         client_trash = self._game_state.trash.list
         assert len(client_trash) == len(trash)
         for idx in range(len(trash)):
-            assert (
-                client_trash[idx] == trash[idx]
+            assert client_trash[idx] == Card.from_server(
+                trash[idx]
             ), f"Mismatch between cards in trash at idx {idx}"
 
         # Hands
@@ -144,8 +142,8 @@ class Agent:
                 client_hand = self._game_state.hands[player.name]
                 assert len(player.hand) == len(client_hand)
                 for idx in range(len(player.hand)):
-                    assert (
-                        client_hand[idx] == player.hand[idx]
+                    assert client_hand[idx] == Card.from_server(
+                        player.hand[idx]
                     ), f"player {player.name} wrong card in hand at idx {idx}"
 
     def known_status(self) -> str:

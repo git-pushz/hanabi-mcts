@@ -3,7 +3,6 @@ import numpy as np
 from enum import IntEnum
 import random
 from typing import List
-import game
 
 
 class Color(IntEnum):
@@ -40,19 +39,15 @@ class Card:
         self.rank_known = False
         self.color_known = False
 
+    @classmethod
+    def from_server(cls, server_card):
+        "Initialize Client crad from server card"
+        return cls(server_card.value, color_str2enum[server_card.color])
+
     def __eq__(self, other):
-        if type(other) is not Card and type(other) is not game.Card:
+        if type(other) is not Card:
             raise TypeError(f"Cannot compare type card with {type(other)}")
-        if hasattr(other, "rank"):
-            return self.rank == other.rank and self.color == other.color
-        elif hasattr(other, "value"):
-            return (
-                self.rank == other.value and self.color == color_str2enum[other.color]
-            )
-        else:
-            raise AttributeError(
-                f"Object {other} doesn't have attribute rank nor value."
-            )
+        return self.rank == other.rank and self.color == other.color
 
     def __ne__(self, other):
         return not self.__eq__(other)
