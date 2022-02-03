@@ -3,6 +3,7 @@ import copy
 from typing import Tuple, List
 from game_state import MCTSState
 from game_move import GameMove
+from utils import Color, CARD_QUANTITIES
 from rules import Rules
 
 
@@ -44,7 +45,7 @@ class Model:
             self._saved_hand = None
         self.state.assert_consistency()
 
-    def valid_moves_old(self, this_player: str) -> List[GameMove]:
+    def _valid_random_moves(self, this_player: str) -> List[GameMove]:
         """
         Returns all possible moves available at the current state
         (that correspond to a certain tree level
@@ -59,8 +60,8 @@ class Model:
         for idx, card in enumerate(hand):
             actions = []
             # if card.rank_known or (card.color_known and self.state.board[card.color] == card.rank - 1):
-            if card.rank_known:
-                actions.append("play")
+            # if card.rank_known:
+            actions.append("play")
             if self.state.used_hints() > 0:
                 actions.append("discard")
             for action in actions:
@@ -72,7 +73,7 @@ class Model:
                 if player == this_player:
                     continue
                 hand = self.state.hands[player]
-                for rank in range(1, 6):
+                for rank in range(1, 1 + len(CARD_QUANTITIES)):
                     if any(card.rank == rank for card in hand):
                         moves.append(
                             GameMove(
@@ -83,7 +84,7 @@ class Model:
                                 hint_value=rank,
                             )
                         )
-                for color in range(5):
+                for color in range(len(Color)):
                     if any(card.color == color for card in hand):
                         moves.append(
                             GameMove(
@@ -136,7 +137,7 @@ class Model:
         Args:
             player: the current player
         """
-        legal_moves = self.valid_moves(player)
+        legal_moves = self._valid_random_moves(player)
         if len(legal_moves) == 0:
             return False
         random_move = np.random.choice(legal_moves)

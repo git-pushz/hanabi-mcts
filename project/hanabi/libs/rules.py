@@ -2,7 +2,7 @@ from typing import List, Callable, Optional
 import copy
 from game_state import MCTSState
 from game_move import GameMove
-from utils import Card, Color, CARD_QUANTITIES
+from utils import Card, Color, CARD_QUANTITIES, Deck
 import numpy as np
 
 
@@ -67,7 +67,7 @@ class Rules:
     @staticmethod
     def _get_probabilities(
         hand: List[Card],
-        mental_state: np.ndarray,
+        mental_state: Deck,
         fn_condition: Callable[[Card, np.ndarray], bool],
         board: np.ndarray,
     ) -> np.ndarray:
@@ -114,12 +114,12 @@ class Rules:
 
             hand = state.hands[destination]
 
-            for r in range(1, 6):
+            for rank in range(1, 1 + len(CARD_QUANTITIES)):
                 total_affected = 0
                 for card in hand:
                     # TODO: JAVA: hand.hasCard
                     if not new_information or not card.rank_known:
-                        if card.rank == r:
+                        if card.rank == rank:
                             total_affected += 1
 
                 if total_affected > best_affected:
@@ -128,18 +128,18 @@ class Rules:
                         action_type=action_type,
                         destination=destination,
                         hint_type="value",
-                        hint_value=r,
+                        hint_value=rank,
                     )
                     # TODO: CONVENTIONS?
                     best_affected = total_affected
                     best_move = new_option
 
-            for c in range(len(Color)):
+            for color in range(len(Color)):
                 total_affected = 0
                 for card in hand:
                     # TODO: JAVA: hand.hasCard
                     if not new_information or not card.color_known:
-                        if card.color == c:
+                        if card.color == color:
                             total_affected += 1
 
                 if total_affected > best_affected:
@@ -148,7 +148,7 @@ class Rules:
                         action_type=action_type,
                         destination=destination,
                         hint_type="color",
-                        hint_value=c,
+                        hint_value=color,
                     )
                     # TODO: CONVENTIONS?
                     best_affected = total_affected
@@ -232,7 +232,7 @@ class Rules:
         mental_state.add_cards(hand, ignore_fd=False)
 
         probabilities = Rules._get_probabilities(
-            hand, mental_state[:, :], Rules._is_playable, state.board
+            hand, mental_state, Rules._is_playable, state.board
         )
 
         if np.max(probabilities) >= threshold:
@@ -266,7 +266,7 @@ class Rules:
         mental_state.add_cards(hand, ignore_fd=False)
 
         probabilities = Rules._get_probabilities(
-            hand, mental_state[:, :], Rules._is_discardable, state.board
+            hand, mental_state, Rules._is_discardable, state.board
         )
 
         if np.max(probabilities) >= threshold:

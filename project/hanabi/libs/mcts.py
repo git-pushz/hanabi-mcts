@@ -123,11 +123,11 @@ class MCTS:
         if not model.check_ended()[0]:
             legal_moves = self._get_available_plays(node, model)
             #####
-            if len(legal_moves) == 0:
-                player = model.state.get_next_player_name(node.data.move.player)
-                hand = model.state.hands[player]
-                for idx in range(len(hand)):
-                    legal_moves.append(GameMove(player, "play", card_idx=idx))
+            # if len(legal_moves) == 0:
+            #     player = model.state.get_next_player_name(node.data.move.player)
+            #     hand = model.state.hands[player]
+            #     for idx in range(len(hand)):
+            #         legal_moves.append(GameMove(player, "play", card_idx=idx))
             #####
             random_move = random.choice(legal_moves)
             model.make_move(random_move)
