@@ -42,8 +42,8 @@ class Card:
     ) -> None:
         self.rank = rank
         self.color = color
-        self.rank_known = False
-        self.color_known = False
+        self.rank_known = rank_known
+        self.color_known = color_known
 
     @classmethod
     def from_server(cls, server_card):
