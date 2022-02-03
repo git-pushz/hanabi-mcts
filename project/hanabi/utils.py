@@ -64,27 +64,25 @@ class Card:
         return f"Card ({rank},{color})"
 
     def reveal_rank(self, rank=None) -> None:
-        if rank is None:
-            if self.rank is None:
-                raise RuntimeError("Cannot reveal card's rank: it's None")
-        else:
+        if rank is not None:
             if self.rank is not None and self.rank != rank:
                 raise RuntimeError(
                     "Cannot reveal card's rank: a different rank is already set"
                 )
             self.rank = rank
+        elif self.rank is None:
+            raise RuntimeError("Cannot reveal card's rank: it's None")
         self.rank_known = True
 
     def reveal_color(self, color=None) -> None:
-        if color is None:
-            if self.color is None:
-                raise RuntimeError("Cannot reveal card's color: it's None")
-        else:
+        if color is not None:
             if self.color is not None and self.color != color:
                 raise RuntimeError(
                     "Cannot reveal card's color: a different color is already set"
                 )
             self.color = color
+        elif self.color is None:
+            raise RuntimeError("Cannot reveal card's color: it's None")
         self.color_known = True
 
     def is_fully_determined(self) -> bool:
