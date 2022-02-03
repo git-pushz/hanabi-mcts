@@ -374,7 +374,7 @@ class MCTSState(GameState):
         If the game isn't ended, it returns False, None
         """
         if self.errors == MAX_ERRORS:
-            return True, sum(self.board) // 3
+            return True, sum(self.board) // 2
             # return True, 0
         # if self.board == self.trash.maxima:
         if np.all(self.board == 5):
