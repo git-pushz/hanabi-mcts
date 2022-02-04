@@ -7,12 +7,7 @@ from tree import Tree, Node, GameNode
 from functools import reduce
 import numpy as np
 import random
-from hyperparameters import (
-    MCTS_TARGET_SIMULATIONS,
-    MCTS_MIN_SIMULATIONS,
-    MCTS_TIME_BUDGET,
-    MCTS_TARGET_ITERATIONS,
-)
+from hyperparameters import MCTS_SIMULATIONS
 
 DEBUG = False
 
@@ -33,19 +28,27 @@ class MCTS:
         )  # dummy game-move
         self.tree = Tree(root)
 
-    def run_search(self) -> GameMove:
+    def run_search(self, time_budget: int = None, iterations: int = None) -> GameMove:
         # each iteration represents the select, expand, simulate, backpropagate iteration
 
-        n_iterations = 0
-        elapsed_time = 0
-        start_time = time.time()
-        while elapsed_time < MCTS_TIME_BUDGET:
-            self._run_search_iteration()
-            n_iterations += 1
-            elapsed_time = time.time() - start_time
+        if (time_budget is None) != (iterations is None):
+            raise RuntimeError(
+                "Exactly one between time budget and iterations must be specified"
+            )
 
-        if DEBUG:
-            print(f"{n_iterations} iterations made")
+        if time_budget is not None:
+            n_iterations = 0
+            elapsed_time = 0
+            start_time = time.time()
+            while elapsed_time < time_budget:
+                self._run_search_iteration()
+                n_iterations += 1
+                elapsed_time = time.time() - start_time
+            if DEBUG:
+                print(f"{n_iterations} iterations made")
+        else:
+            for _ in range(iterations):
+                self._run_search_iteration()
 
         children = self.tree.get_children(self.tree.get_root())
         # selecting from the direct children of the root the one containing the move with most number of simulations
@@ -63,19 +66,9 @@ class MCTS:
 
         ## added
         simulation_score = 0
-        n_simulations = 0
-        time_budget = MCTS_TIME_BUDGET / MCTS_TARGET_ITERATIONS
-        elapsed_time = 0
-        start_time = time.time()
-        while n_simulations < MCTS_MIN_SIMULATIONS or (
-            n_simulations < MCTS_TARGET_SIMULATIONS and elapsed_time < time_budget
-        ):
+        for _ in range(MCTS_SIMULATIONS):
             simulation_score += self._simulate(expand_leaf, copy.deepcopy(expand_model))
-            n_simulations += 1
-            elapsed_time = time.time() - start_time
-        if DEBUG:
-            print(f"{n_simulations} simulations made")
-        simulation_score /= n_simulations
+        simulation_score /= MCTS_SIMULATIONS
         self._backpropagate(expand_leaf, simulation_score)
         if DEBUG:
             print(

@@ -2,7 +2,7 @@ import copy
 import numpy as np
 from typing import List, Tuple, Optional
 import GameData
-from hyperparameters import SCORE_3_ERRORS_MULT
+from hyperparameters import SCORE_3_ERRORS
 
 from utils import (
     CARD_QUANTITIES,
@@ -380,7 +380,7 @@ class MCTSState(GameState):
         If the game isn't ended, it returns False, None
         """
         if self.errors == MAX_ERRORS:
-            return True, self.eval_final_state() * SCORE_3_ERRORS_MULT
+            return True, self.eval_final_state() * SCORE_3_ERRORS
         # if self.board == self.trash.maxima:
         if np.all(self.board == 5):
             return True, self.eval_final_state()
