@@ -305,17 +305,18 @@ class MCTSState(GameState):
             player_name: the name of the player
             saved_hand: the hand to restore
         """
+        hand_length = len(self.hands[player_name])
         self.deck.add_cards(self.hands[player_name])  # put cards back in deck
         self.hands[player_name] = []
         self._remove_illegal_cards(saved_hand)  # remove inconsistencies
         self.deck.remove_cards(
             filter(lambda card: card is not None, saved_hand)
         )  # pick cards from deck
-        self._determinize_empty_slots(saved_hand)
+        self._determinize_empty_slots(saved_hand, hand_length)
         self.hands[player_name] = saved_hand
 
     # MCTS
-    def _determinize_empty_slots(self, hand: List[Card]) -> None:
+    def _determinize_empty_slots(self, hand: List[Card], hand_length: int) -> None:
         """
         Determinize the empty slots of the hand (where card = None)
 
@@ -324,8 +325,11 @@ class MCTSState(GameState):
         """
         for idx in range(len(hand)):
             if hand[idx] is None:
-                self.deck.assert_no_reserved_cards()
-                hand[idx] = self.deck.draw()
+                if hand_length == len(hand):
+                    self.deck.assert_no_reserved_cards()
+                    hand[idx] = self.deck.draw()
+                else:
+                    hand.pop(idx)
 
     # MCTS
     def _remove_illegal_cards(self, cards: List[Card]) -> None:
@@ -345,7 +349,7 @@ class MCTSState(GameState):
             #     continue
             quantity = 1 + self.deck[card.rank, card.color]  # 1 is for "card" itself
             for c in locations:
-                if c.rank == card.rank and c.color == card.color:
+                if c == card:
                     quantity += 1
             if self.board[card.color] >= card.rank:
                 quantity += 1
@@ -399,4 +403,4 @@ class MCTSState(GameState):
         zero_count = np.count_nonzero(self.board == 0)  # actually counts zeros
         # return base_points - five_count * alpha - zero_count * beta
         coeff = base_points // 10 + 1
-        return base_points
+        return base_points - (5 - min(self.board)) - sum()
