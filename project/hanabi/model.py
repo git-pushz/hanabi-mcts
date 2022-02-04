@@ -61,13 +61,13 @@ class Model:
             actions = []
             # if card.rank_known or (card.color_known and self.state.board[card.color] == card.rank - 1):
             if (
-                # (self.state.errors == 0 and card.is_semi_determined())
-                (self.state.errors <= 1 and card.rank_known)
-                or (
-                    self.state.errors == 2
-                    and card.is_fully_determined()
-                    and self.state.board[card.color] + 1 == card.rank  # playable
-                )
+                card.is_fully_determined()
+                and self.state.board[card.color] == card.rank - 1  # playable
+            ) or (
+                self.state.errors <= 1
+                and card.rank_known
+                and not card.color_known
+                and np.any(self.state.board == card.rank - 1)
             ):
                 actions.append("play")
             if self.state.used_hints() > 0:
