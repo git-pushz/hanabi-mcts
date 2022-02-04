@@ -268,7 +268,7 @@ class Deck:
 class Trash:
     def __init__(self) -> None:
         self.list = []
-        self.maxima = [5] * 5
+        self.maxima = np.full(len(Color), 5, dtype=np.uint8)
         col = np.array(CARD_QUANTITIES)
         col = col.reshape(col.size, 1)
         self._table = np.tile(col, len(Color))
@@ -277,7 +277,7 @@ class Trash:
         cls = self.__class__
         result = cls.__new__(cls)
         result.list = copy.deepcopy(self.list)
-        result.maxima = copy.copy(self.maxima)
+        result.maxima = np.copy(self.maxima)
         result._table = np.copy(self._table)
         return result
 
