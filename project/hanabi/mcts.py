@@ -31,7 +31,7 @@ class MCTS:
     def run_search(self, time_budget: int = None, iterations: int = None) -> GameMove:
         # each iteration represents the select, expand, simulate, backpropagate iteration
 
-        if (time_budget is None) != (iterations is None):
+        if (time_budget is None) == (iterations is None):
             raise RuntimeError(
                 "Exactly one between time budget and iterations must be specified"
             )
