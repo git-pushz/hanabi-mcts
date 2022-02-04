@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 if [[ $# -ne 1 && $# -ne 2 ]]; then
 	echo "Wrong number of arguments"

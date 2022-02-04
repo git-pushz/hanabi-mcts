@@ -152,7 +152,7 @@ class Agent:
         for color in Color:
             s += color_enum2str[color] + " "
         s += "\n"
-        s += f"Board: {self._game_state.board}\n"
+        s += f"Board: {self._game_state.board}: score = {np.sum(self._game_state.board)}\n"
         s += "Hands:"
         for p, h in self._game_state.hands.items():
             s += f"\tPlayer {p}: {h}\n"

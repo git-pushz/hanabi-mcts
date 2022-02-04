@@ -281,6 +281,17 @@ class Trash:
         result._table = np.copy(self._table)
         return result
 
+    def __getitem__(self, item):
+        if type(item) is tuple:
+            if type(item[0]) is int:
+                return self._table[item[0] - 1, item[1]]
+            elif type(item[0]) is slice:
+                return self._table[item[0], item[1]]
+            else:
+                raise IndexError(f"{item}, {type(item[0])}")
+        else:
+            raise IndexError
+
     def __repr__(self):
         return str(self.list)
 
