@@ -241,9 +241,8 @@ class Deck:
             rank += 1
 
         elif rank_known:
-            assert (
-                self._reserved_ranks[rank - 1] > 0
-            ), f"No card with rank{rank} was previously reserved"
+            if self._reserved_ranks[rank - 1] <= 0:
+                raise RuntimeError(f"No card with rank {rank} was previously reserved")
             self._reserved_ranks[rank - 1] -= 1
             possibilities = [
                 c for c in range(table.shape[1]) for _ in range(table[rank - 1][c])
@@ -251,9 +250,10 @@ class Deck:
             color = random.choice(possibilities)
 
         elif color_known:
-            assert (
-                self._reserved_colors[color] > 0
-            ), f"No card with color {color} was previously reserved"
+            if self._reserved_colors[color] <= 0:
+                raise RuntimeError(
+                    f"No card with color {color} was previously reserved"
+                )
             self._reserved_colors[color] -= 1
             possibilities = [
                 r for r in range(table.shape[0]) for _ in range(table[r][color])
