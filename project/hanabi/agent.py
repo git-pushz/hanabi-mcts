@@ -6,7 +6,6 @@ from game_state import GameState
 from utils import Card, Color, color_enum2str, color_str2enum
 from mcts import MCTS
 import GameData
-from hyperparameters import MCTS_ITERATIONS, MCTS_TIME_BUDGET
 
 DEBUG = False
 VERBOSE = True
@@ -31,7 +30,7 @@ class Agent:
         mcts = MCTS(self._game_state, self.name)
         # move = mcts.run_search(iterations=MCTS_ITERATIONS)
         # move = mcts.run_search(time_budget=MOVE_TIME_BUDGET)
-        move = mcts.run_search(time_budget=MCTS_TIME_BUDGET, iterations=MCTS_ITERATIONS)
+        move = mcts.run_search()
         if move.action_type == "hint":
             hint_value = (
                 move.hint_value
