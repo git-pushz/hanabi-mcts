@@ -77,7 +77,7 @@ class GameState:
         result.players = copy.deepcopy(self.players)
         result.root_player = copy.copy(self.root_player)
         result.hands = copy.deepcopy(self.hands)
-        result.board = self.board[:]
+        result.board = np.copy(self.board)
         result.trash = copy.deepcopy(self.trash)
         result.deck = copy.deepcopy(self.deck)
         result.hints = self.hints
