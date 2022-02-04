@@ -56,7 +56,7 @@ class GameState:
         self.players = copy.deepcopy(players_names)
         self.root_player = root_player
         if data is not None:
-            self.board = [0] * 5
+            self.board = np.full(len(Color), 0, dtype=np.uint8)
             self.deck = Deck()
             self.trash = Trash()
             self.hints = data.usedNoteTokens
@@ -192,7 +192,7 @@ class MCTSState(GameState):
             copy.copy(initial_state.root_player),
         )
         self.hands = copy.deepcopy(initial_state.hands)
-        self.board = initial_state.board[:]
+        self.board = np.copy(initial_state.board)
         self.deck = copy.deepcopy(initial_state.deck)
         self.trash = copy.deepcopy(initial_state.trash)
         self.hints = initial_state.hints
@@ -396,7 +396,7 @@ class MCTSState(GameState):
             for r in range(1, 1 + len(CARD_QUANTITIES))
         }
         five_count = rank_ratios[5]
-        zero_count = self.board.count(0)
+        zero_count = np.count_nonzero(self.board == 0)  # actually counts zeros
         # return base_points - five_count * alpha - zero_count * beta
         coeff = base_points // 10 + 1
         return base_points

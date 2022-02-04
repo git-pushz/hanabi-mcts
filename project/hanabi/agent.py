@@ -123,8 +123,8 @@ class Agent:
         assert self._game_state.errors == mistakes_made, "wrong count of errors"
 
         # Board
-        b = [len(cards) for cards in board.values()]
-        assert (
+        b = np.array([len(cards) for cards in board.values()])
+        assert np.all(
             self._game_state.board == b
         ), f"wrong board: self.board: {self._game_state.board}, board: {b}"
 
