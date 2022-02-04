@@ -277,11 +277,11 @@ class Rules:
 
         # TODO: improve
         # Search for duplicate fully determined cards in hand
-        for idx, card in enumerate(hand):
-            if card.is_fully_determined():
-                for c in hand:
-                    if c.is_fully_determined() and c == card:
-                        return GameMove(player, action_type, card_idx=idx)
+        # for idx, card in enumerate(hand):
+        #     if card.is_fully_determined():
+        #         for c in hand:
+        #             if c.is_fully_determined() and c == card:
+        #                 return GameMove(player, action_type, card_idx=idx)
 
         mental_state = copy.deepcopy(state.deck)
         mental_state.add_cards(hand, ignore_fd=False)
