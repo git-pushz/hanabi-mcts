@@ -67,15 +67,15 @@ class Rules:
         return all(first == x for x in iterator)
 
     @staticmethod
-    def _is_playable(card: Card, board) -> bool:
+    def _is_playable(card: Card, board: np.ndarray) -> bool:
         return board[card.color] == card.rank - 1
 
     @staticmethod
-    def _is_discardable(card: Card, board) -> bool:
+    def _is_discardable(card: Card, board: np.ndarray) -> bool:
         return board[card.color] >= card.rank
 
     @staticmethod
-    def _is_unplayable(card: Card, board) -> bool:
+    def _is_unplayable(card: Card, board: np.ndarray) -> bool:
         return not (
             Rules._is_playable(card, board) or Rules._is_discardable(card, board)
         )
