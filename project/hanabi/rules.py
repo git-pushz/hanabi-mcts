@@ -67,25 +67,27 @@ class Rules:
         return all(first == x for x in iterator)
 
     @staticmethod
-    def _is_playable(card: Card, board: np.ndarray) -> bool:
+    def _is_playable(card: Card, board: np.ndarray, maxima: np.ndarray) -> bool:
         return board[card.color] == card.rank - 1
 
     @staticmethod
-    def _is_discardable(card: Card, board: np.ndarray) -> bool:
-        return board[card.color] >= card.rank
+    def _is_discardable(card: Card, board: np.ndarray, maxima: np.ndarray) -> bool:
+        return board[card.color] >= card.rank or maxima[card.color] < card.rank
 
     @staticmethod
-    def _is_unplayable(card: Card, board: np.ndarray) -> bool:
+    def _is_unplayable(card: Card, board: np.ndarray, maxima: np.ndarray) -> bool:
         return not (
-            Rules._is_playable(card, board) or Rules._is_discardable(card, board)
+            Rules._is_playable(card, board, maxima)
+            or Rules._is_discardable(card, board, maxima)
         )
 
     @staticmethod
     def _get_probabilities(
         hand: List[Card],
         mental_state: Deck,
-        fn_condition: Callable[[Card, np.ndarray], bool],
+        fn_condition: Callable[[Card, np.ndarray, np.ndarray], bool],
         board: np.ndarray,
+        maxima: np.ndarray,
     ) -> np.ndarray:
         probabilities = np.empty(len(hand), dtype=np.float)
 
@@ -104,7 +106,7 @@ class Rules:
             assert number_of_determinizations > 0
             number_of_playable = 0
             for r, c in zip(*np.nonzero(possibilities)):
-                if fn_condition(Card(r + 1, c), board):
+                if fn_condition(Card(r + 1, c), board, maxima):
                     number_of_playable += possibilities[r][c]
             probabilities[idx] = number_of_playable / number_of_determinizations
 
@@ -174,7 +176,9 @@ class Rules:
     # RULES 2 and 3
     @staticmethod
     def _tell_anyone(
-        state: MCTSState, player: str, fn_condition: Callable[[Card, np.ndarray], bool]
+        state: MCTSState,
+        player: str,
+        fn_condition: Callable[[Card, np.ndarray, np.ndarray], bool],
     ) -> Optional[GameMove]:
         if state.available_hints() == 0:
             return None
@@ -187,7 +191,10 @@ class Rules:
             if destination == player:
                 return None
             for idx, card in enumerate(state.hands[destination]):
-                if fn_condition(card, state.board) and not card.is_fully_determined():
+                if (
+                    fn_condition(card, state.board, state.trash.maxima)
+                    and not card.is_fully_determined()
+                ):
                     if not card.rank_known:
                         hint_type = "value"
                         hint_value = card.rank
@@ -205,7 +212,9 @@ class Rules:
     # RULES 4, 5 and 6
     @staticmethod
     def _complete_tell_anyone(
-        state: MCTSState, player: str, fn_condition: Callable[[Card, np.ndarray], bool]
+        state: MCTSState,
+        player: str,
+        fn_condition: Callable[[Card, np.ndarray, np.ndarray], bool],
     ) -> Optional[GameMove]:
         if state.available_hints() == 0:
             return None
@@ -218,7 +227,9 @@ class Rules:
             if destination == player:
                 return None
             for card in state.hands[destination]:
-                if card.is_semi_determined() and fn_condition(card, state.board):
+                if card.is_semi_determined() and fn_condition(
+                    card, state.board, state.trash.maxima
+                ):
                     if not card.rank_known:
                         hint_type = "value"
                         hint_value = card.rank
@@ -245,7 +256,7 @@ class Rules:
         mental_state.add_cards(hand, ignore_fd=False)
 
         probabilities = Rules._get_probabilities(
-            hand, mental_state, Rules._is_playable, state.board
+            hand, mental_state, Rules._is_playable, state.board, state.trash.maxima
         )
 
         if np.max(probabilities) >= threshold:
@@ -287,7 +298,7 @@ class Rules:
         mental_state.add_cards(hand, ignore_fd=False)
 
         probabilities = Rules._get_probabilities(
-            hand, mental_state, Rules._is_discardable, state.board
+            hand, mental_state, Rules._is_discardable, state.board, state.trash.maxima
         )
 
         if np.max(probabilities) >= threshold:
