@@ -281,25 +281,31 @@ class MCTSState(GameState):
         if player_name == self.root_player:
             raise RuntimeError("Cannot re-determinize root player's hand")
 
-        self.deck.reserve_semi_determined_cards(hand)
         self.deck.add_cards(hand, ignore_fd=True)
+        success = False
+        while not success:
+            success = True
+            self.deck.reserve_semi_determined_cards(hand)
 
-        new_hand = []
+            new_hand = []
+            for idx, card in enumerate(hand):
+                if card.is_fully_determined():
+                    new_hand.append(card)
+                else:
+                    rank = card.rank if card.rank_known else None
+                    color = card.color if card.color_known else None
+                    new_card = self.deck.draw(rank=rank, color=color)
+                    if new_card is None:
+                        self.deck.reset_reservations()
+                        self.deck.add_cards(new_hand, ignore_fd=True)
+                        success = False
+                        break
+                    assert new_card.rank_known == card.rank_known
+                    assert new_card.color_known == card.color_known
+                    new_hand.append(new_card)
 
-        for idx, card in enumerate(hand):
-            if card.is_fully_determined():
-                new_hand.append(card)
-            else:
-                rank = card.rank if card.rank_known else None
-                color = card.color if card.color_known else None
-                new_card = self.deck.draw(rank=rank, color=color)
-                assert new_card.rank_known == card.rank_known
-                assert new_card.color_known == card.color_known
-                new_hand.append(new_card)
-
-        self.deck.assert_no_reserved_cards()
-
-        self.hands[player_name] = new_hand
+            self.deck.assert_no_reserved_cards()
+            self.hands[player_name] = new_hand
 
     # MCTS
     def restore_hand(self, player_name: str, saved_hand: List[Card]) -> None:

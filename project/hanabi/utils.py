@@ -237,8 +237,11 @@ class Deck:
                 for coordinates, occurrencies in np.ndenumerate(table)
                 for _ in range(occurrencies)
             ]
-            rank, color = random.choice(possibilities)
-            rank += 1
+            if len(possibilities) == 0:
+                return None
+            else:
+                rank, color = random.choice(possibilities)
+                rank += 1
 
         elif rank_known:
             if self._reserved_ranks[rank - 1] <= 0:
@@ -247,7 +250,10 @@ class Deck:
             possibilities = [
                 c for c in range(table.shape[1]) for _ in range(table[rank - 1][c])
             ]
-            color = random.choice(possibilities)
+            if len(possibilities) == 0:
+                return None
+            else:
+                color = random.choice(possibilities)
 
         elif color_known:
             if self._reserved_colors[color] <= 0:
@@ -258,11 +264,18 @@ class Deck:
             possibilities = [
                 r for r in range(table.shape[0]) for _ in range(table[r][color])
             ]
-            rank = random.choice(possibilities) + 1
+            if len(possibilities) == 0:
+                return None
+            else:
+                rank = random.choice(possibilities) + 1
 
         assert rank is not None and color is not None
         self._decrement(rank, color)
         return Card(rank, color, rank_known=rank_known, color_known=color_known)
+
+    def reset_reservations(self):
+        self._reserved_ranks[:] = 0
+        self._reserved_colors[:] = 0
 
 
 class Trash:
