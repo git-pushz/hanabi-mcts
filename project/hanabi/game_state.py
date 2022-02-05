@@ -314,8 +314,8 @@ class MCTSState(GameState):
         # hand_length = len(self.hands[player_name])
         self.deck.add_cards(self.hands[player_name])  # put cards back in deck
         # self.hands[player_name] = []
-        # saved_hand = self._remove_illegal_cards(saved_hand)  # remove inconsistencies
-        self.deck.remove_cards(saved_hand)  # pick cards from deck
+        self._remove_illegal_cards(saved_hand)  # remove inconsistencies
+        # self.deck.remove_cards(saved_hand)  # pick cards from deck
         if len(self.hands[player_name]) > len(saved_hand):
             self.deck.assert_no_reserved_cards()
             saved_hand.append(self.deck.draw())
@@ -323,7 +323,7 @@ class MCTSState(GameState):
         self.hands[player_name] = saved_hand
 
     # MCTS
-    def _remove_illegal_cards(self, cards: List[Card]) -> List[Card]:
+    def _remove_illegal_cards(self, cards: List[Card]) -> None:
         """
         Remove the illegal cards from the list (considering all the cards in the trash,
         in the player's hands and on the table)
@@ -331,24 +331,33 @@ class MCTSState(GameState):
         Args:
             cards: the list of cards to modify
         """
-        legal_cards = []
+        # legal_cards = []
 
-        locations = copy.copy(self.trash.list)
-        for p in self.players:
-            locations += self.hands[p]
+        # locations = copy.copy(self.trash.list)
+        # for p in self.players:
+        #     locations += self.hands[p]
+
+        # for idx, card in enumerate(cards):
+        #     quantity = 1 + self.deck[card.rank, card.color]  # 1 is for "card" itself
+        #     for c in locations:
+        #         if c.rank == card.rank and c.color == card.color:
+        #             quantity += 1
+        #     if self.board[card.color] >= card.rank:
+        #         quantity += 1
+
+        #     if quantity == CARD_QUANTITIES[card.rank - 1]:
+        #         legal_cards.append(card)
+
+        invalid_indexes = []
 
         for idx, card in enumerate(cards):
-            quantity = 1 + self.deck[card.rank, card.color]  # 1 is for "card" itself
-            for c in locations:
-                if c.rank == card.rank and c.color == card.color:
-                    quantity += 1
-            if self.board[card.color] >= card.rank:
-                quantity += 1
+            if self.deck[card.rank, card.color] == 0:
+                invalid_indexes.append(idx)
+            else:
+                self.deck.remove_cards([card])
 
-            if quantity == CARD_QUANTITIES[card.rank - 1]:
-                legal_cards.append(card)
-
-        return legal_cards
+        for idx in invalid_indexes:
+            cards[idx] = self.deck.draw()
 
     def assert_consistency(self) -> None:
         col = np.array(CARD_QUANTITIES)
