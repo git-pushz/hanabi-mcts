@@ -348,16 +348,12 @@ class MCTSState(GameState):
         #     if quantity == CARD_QUANTITIES[card.rank - 1]:
         #         legal_cards.append(card)
 
-        invalid_indexes = []
-
-        for idx, card in enumerate(cards):
-            if self.deck[card.rank, card.color] == 0:
-                invalid_indexes.append(idx)
-            else:
+        for idx in range(len(cards)):
+            card = cards[idx]
+            if self.deck[card.rank, card.color] > 0:
                 self.deck.remove_cards([card])
-
-        for idx in invalid_indexes:
-            cards[idx] = self.deck.draw()
+            else:
+                cards[idx] = self.deck.draw()
 
     def assert_consistency(self) -> None:
         col = np.array(CARD_QUANTITIES)
