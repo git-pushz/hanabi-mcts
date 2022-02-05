@@ -11,7 +11,7 @@ from hyperparameters import (
     RULE_9_MIN_HINTS,
     RULE_9_BEST_IDX_0,
     EXPEND_PROBABILITY,
-    RULE_8_DECK_LENGTH
+    RULE_8_DECK_LENGTH,
 )
 
 
@@ -62,13 +62,9 @@ class Rules:
         # p = highest + len(state.deck)*(lowest-highest/50)
         moves.append(Rules._play_probably_safe(PLAY_SAFE_PROBABILITY))
         # RULE 8
-        moves.append(
-            Rules._play_probably_safe_late(PLAY_SAFE_LATE_PROBABILITY)
-        )
+        moves.append(Rules._play_probably_safe_late(PLAY_SAFE_LATE_PROBABILITY))
         # RULE 9
-        moves.append(
-            Rules._discard_probably_useless(DISCARD_PROBABILITY)
-        )
+        moves.append(Rules._discard_probably_useless(DISCARD_PROBABILITY))
         # RULE 10
         # moves.append(Rules._discard_least_likely_to_be_necessary(EXPEND_PROBABILITY))
         return [m for m in moves if m is not None]
@@ -233,7 +229,7 @@ class Rules:
     # RULES 4, 5 and 6
     @staticmethod
     def _complete_tell_anyone(
-            fn_condition: Callable[[Card, np.ndarray, Trash], bool],
+        fn_condition: Callable[[Card, np.ndarray, Trash], bool],
     ) -> Optional[GameMove]:
         if Rules._state.available_hints() == 0:
             return None
@@ -269,25 +265,26 @@ class Rules:
 
     # RULE 7
     @staticmethod
-    def _play_probably_safe(
-        threshold: float = 0.7
-    ) -> Optional[GameMove]:
+    def _play_probably_safe(threshold: float = 0.7) -> Optional[GameMove]:
         action_type = "play"
 
         probabilities = Rules._get_probabilities(
-            Rules._state.hands[Rules._player], Rules._is_playable, Rules._state.board, Rules._state.trash
+            Rules._state.hands[Rules._player],
+            Rules._is_playable,
+            Rules._state.board,
+            Rules._state.trash,
         )
 
         if np.max(probabilities) >= threshold:
-            return GameMove(Rules._player, action_type, card_idx=np.argmax(probabilities))
+            return GameMove(
+                Rules._player, action_type, card_idx=np.argmax(probabilities)
+            )
         else:
             return None
 
     # RULE 8
     @staticmethod
-    def _play_probably_safe_late(
-        threshold: float = 0.4
-    ) -> Optional[GameMove]:
+    def _play_probably_safe_late(threshold: float = 0.4) -> Optional[GameMove]:
         move = None
         if len(Rules._state.deck) <= RULE_8_DECK_LENGTH:
             move = Rules._play_probably_safe(threshold)
@@ -295,9 +292,7 @@ class Rules:
 
     # RULE 9
     @staticmethod
-    def _discard_probably_useless(
-        threshold: float
-    ) -> Optional[GameMove]:
+    def _discard_probably_useless(threshold: float) -> Optional[GameMove]:
         if Rules._state.used_hints() == 0:
             return None
 

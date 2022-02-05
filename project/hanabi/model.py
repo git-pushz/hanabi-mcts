@@ -21,27 +21,30 @@ class Model:
         result._saved_hand = copy.deepcopy(self._saved_hand)
         return result
 
-    def enter_node(self, player: str) -> None:
+    def redeterminize_hand(self, player: str) -> None:
         """
         Save the player's hand and re-determinize it
 
         Args:
             player: the name of the player
         """
+        if self._saved_hand is not None:
+            raise RuntimeError("Trying to overwrite saved hand")
         if player != self.state.root_player:
-            # TODO deepcopy
-            self._saved_hand = copy.copy(self.state.hands[player])
+            self._saved_hand = copy.deepcopy(self.state.hands[player])
             self.state.redeterminize_hand(player)
         self.state.assert_consistency()
 
-    def exit_node(self, player: str) -> None:
+    def restore_hand(self, player: str) -> None:
         """
         Restore the player's hand with the previous saved one
 
         Args:
             player: the name of the player
         """
-        if player != self.state.root_player and self._saved_hand is not None:
+        if player != self.state.root_player:
+            if self._saved_hand is None:
+                raise RuntimeError("No saved hand")
             self.state.restore_hand(player, self._saved_hand)
             self._saved_hand = None
         self.state.assert_consistency()
@@ -110,7 +113,7 @@ class Model:
     def valid_moves(self, this_player: str) -> List[GameMove]:
         return Rules.get_rules_moves(self.state, this_player)
 
-    def make_move(self, move: GameMove) -> None:
+    def make_move(self, move: GameMove, update_saved_hand: bool = False) -> None:
         """
         Makes a move and updates the game state accordingly
 
@@ -122,16 +125,19 @@ class Model:
 
         is_last_move = len(self.state.deck) == 0
 
-        if move.action_type == "play":
-            self.state.play_card(move.player, move.card_idx)
-        elif move.action_type == "discard":
-            # assert self.state.used_hints() > 0
-            self.state.discard_card(move.player, move.card_idx)
-        elif move.action_type == "hint":
+        if move.action_type == "hint":
             # assert self.state.available_hints() > 0
             self.state.give_hint(move.destination, move.hint_type, move.hint_value)
         else:
-            raise RuntimeError(f"Unknown action type: {move.action_type}")
+            if update_saved_hand and self._saved_hand is not None:
+                del self._saved_hand[move.card_idx]
+            if move.action_type == "play":
+                self.state.play_card(move.player, move.card_idx)
+            elif move.action_type == "discard":
+                # assert self.state.used_hints() > 0
+                self.state.discard_card(move.player, move.card_idx)
+            else:
+                raise RuntimeError(f"Unknown action type: {move.action_type}")
 
         assert not self.state.last_turn_played[move.player]
 

@@ -284,16 +284,22 @@ class MCTSState(GameState):
         self.deck.reserve_semi_determined_cards(hand)
         self.deck.add_cards(hand, ignore_fd=True)
 
+        new_hand = []
+
         for idx, card in enumerate(hand):
-            if not card.is_fully_determined():
+            if card.is_fully_determined():
+                new_hand.append(card)
+            else:
                 rank = card.rank if card.rank_known else None
                 color = card.color if card.color_known else None
                 new_card = self.deck.draw(rank=rank, color=color)
                 assert new_card.rank_known == card.rank_known
                 assert new_card.color_known == card.color_known
-                hand[idx] = new_card
+                new_hand.append(new_card)
 
         self.deck.assert_no_reserved_cards()
+
+        self.hands[player_name] = new_hand
 
     # MCTS
     def restore_hand(self, player_name: str, saved_hand: List[Card]) -> None:
@@ -305,34 +311,19 @@ class MCTSState(GameState):
             player_name: the name of the player
             saved_hand: the hand to restore
         """
-        hand_length = len(self.hands[player_name])
+        # hand_length = len(self.hands[player_name])
         self.deck.add_cards(self.hands[player_name])  # put cards back in deck
-        self.hands[player_name] = []
-        self._remove_illegal_cards(saved_hand)  # remove inconsistencies
-        self.deck.remove_cards(
-            filter(lambda card: card is not None, saved_hand)
-        )  # pick cards from deck
-        self._determinize_empty_slots(saved_hand, hand_length)
+        # self.hands[player_name] = []
+        # saved_hand = self._remove_illegal_cards(saved_hand)  # remove inconsistencies
+        self.deck.remove_cards(saved_hand)  # pick cards from deck
+        if len(self.hands[player_name]) > len(saved_hand):
+            self.deck.assert_no_reserved_cards()
+            saved_hand.append(self.deck.draw())
+            assert len(self.hands[player_name]) == len(saved_hand)  # at most 1 card
         self.hands[player_name] = saved_hand
 
     # MCTS
-    def _determinize_empty_slots(self, hand: List[Card], hand_length: int) -> None:
-        """
-        Determinize the empty slots of the hand (where card = None)
-
-        Args:
-            hand: the hand to adjust
-        """
-        for idx in range(len(hand)):
-            if hand[idx] is None:
-                if hand_length == len(hand):
-                    self.deck.assert_no_reserved_cards()
-                    hand[idx] = self.deck.draw()
-                else:
-                    hand.pop(idx)
-
-    # MCTS
-    def _remove_illegal_cards(self, cards: List[Card]) -> None:
+    def _remove_illegal_cards(self, cards: List[Card]) -> List[Card]:
         """
         Remove the illegal cards from the list (considering all the cards in the trash,
         in the player's hands and on the table)
@@ -340,21 +331,24 @@ class MCTSState(GameState):
         Args:
             cards: the list of cards to modify
         """
-        locations = self.trash.list
+        legal_cards = []
+
+        locations = copy.copy(self.trash.list)
         for p in self.players:
             locations += self.hands[p]
 
         for idx, card in enumerate(cards):
-            # if card is None:
-            #     continue
             quantity = 1 + self.deck[card.rank, card.color]  # 1 is for "card" itself
             for c in locations:
-                if c == card:
+                if c.rank == card.rank and c.color == card.color:
                     quantity += 1
             if self.board[card.color] >= card.rank:
                 quantity += 1
-            if quantity > CARD_QUANTITIES[card.rank - 1]:
-                cards[idx] = None
+
+            if quantity == CARD_QUANTITIES[card.rank - 1]:
+                legal_cards.append(card)
+
+        return legal_cards
 
     def assert_consistency(self) -> None:
         col = np.array(CARD_QUANTITIES)

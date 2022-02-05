@@ -96,13 +96,15 @@ class MCTS:
     def _select(self, model: Model) -> Tuple[Node, Model]:
         node = self.tree.get_root()
         # model.state.redeterminize_hand(model.state.root_player)
+        next_player = model.state.get_next_player_name(node.data.move.player)
         while not node.is_leaf() and self._is_fully_explored(node, model):
             node = self._get_best_child_UCB1(node)
-            model.exit_node(node.data.move.player)  # restore hand
-            model.make_move(node.data.move)
-            model.enter_node(
-                model.state.get_next_player_name(node.data.move.player)
-            )  # re-determinize hand
+            # make the move that bring us to "node"
+            model.make_move(node.data.move, update_saved_hand=True)
+            assert next_player == node.data.move.player
+            model.restore_hand(node.data.move.player)  # restore hand
+            next_player = model.state.get_next_player_name(node.data.move.player)
+            model.redeterminize_hand(next_player)  # re-determinize hand
         return node, model
 
     def _is_fully_explored(self, node: Node, model: Model) -> bool:
