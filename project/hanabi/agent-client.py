@@ -7,7 +7,7 @@ import socket
 
 import agent
 from constants import *
-from agent import Agent, DEBUG, VERBOSE, LOG, HAND_SIZE
+from agent import Agent, DEBUG, VERBOSE, LOG
 import os
 import traceback
 
