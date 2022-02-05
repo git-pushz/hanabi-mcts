@@ -180,12 +180,15 @@ class Model:
             if (
                 play_idx is None
                 and self.state.errors < 2
-                # and card.rank_known
-                # and not card.color_known
-                # and np.any(self.state.board == card.rank - 1)
+                and card.rank_known
+                and not card.color_known
+                and np.any(self.state.board == card.rank - 1)
             ):
-                # play_idx = idx
-                play_idx = np.random.choice(len(hand))
+                play_idx = idx
+                # play_idx = None
+
+        if play_idx is None and self.state.errors < 2:
+            play_idx = np.random.choice(len(hand))
 
         if play_idx is not None:
             action_types.append("play")
