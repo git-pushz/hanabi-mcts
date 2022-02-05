@@ -4,8 +4,10 @@ from sys import argv, stdout
 from threading import Thread, Condition
 import GameData
 import socket
+
+import agent
 from constants import *
-from agent import Agent, DEBUG, VERBOSE, LOG
+from agent import Agent, DEBUG, VERBOSE, LOG, HAND_SIZE
 import os
 import traceback
 
@@ -170,7 +172,7 @@ def main():
                 run = False
                 # decrement turn because this notify will make the agent take another decision (in the current turn)
                 # in the make_move, which by default increments the turns count
-                agent.turn -= 1
+                agent.turn -= len(agent.players)
                 with cv:
                     cv.notify()
 

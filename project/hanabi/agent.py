@@ -61,6 +61,7 @@ class Agent:
             card_idx, card.value, color_str2enum[card.color]
         )
 
+
     def track_discarded_card(self, player: str, card_idx: int) -> None:
         self._game_state.card_discarded(player, card_idx)
 
@@ -69,6 +70,7 @@ class Agent:
 
     def track_drawn_card(self, players: list) -> None:
         """
+
         Track a card drawn by another player form the deck
         """
         different_hands = 0
