@@ -399,13 +399,13 @@ class MCTSState(GameState):
 
     def eval_final_state(self, alpha: float = 0.1, beta: float = 1) -> float:
         base_points = sum(self.board)
-        ratios = [c.rank for c in self.trash.list]
-        rank_ratios = {
-            r: ratios.count(r) / (CARD_QUANTITIES[r - 1] * len(Color))
-            for r in range(1, 1 + len(CARD_QUANTITIES))
-        }
-        five_count = rank_ratios[5]
-        zero_count = np.count_nonzero(self.board == 0)  # actually counts zeros
-        # return base_points - five_count * alpha - zero_count * beta
-        coeff = base_points // 10 + 1
+        # ratios = [c.rank for c in self.trash.list]
+        # rank_ratios = {
+        #     r: ratios.count(r) / (CARD_QUANTITIES[r - 1] * len(Color))
+        #     for r in range(1, 1 + len(CARD_QUANTITIES))
+        # }
+        # five_count = rank_ratios[5]
+        # zero_count = np.count_nonzero(self.board == 0)  # actually counts zeros
+        # # return base_points - five_count * alpha - zero_count * beta
+        # coeff = base_points // 10 + 1
         return base_points  # - (5 - min(self.board)) - np.sum(5-self.trash.maxima)
