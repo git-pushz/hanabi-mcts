@@ -210,21 +210,19 @@ class Deck:
         max_iterations = 100
 
         while update_table:
-            update_table = False
+            row_sums = np.sum(table, axis=1)
+            r_idx = np.logical_and(row_sums <= self._reserved_ranks, row_sums != 0)
+            if rank_known:
+                r_idx[rank - 1] = False
+            table[r_idx, :] = 0
+            update_table = np.any(r_idx)
 
-            if rank is None:
-                row_sums = np.sum(table, axis=1)
-                # if no rank is specified, do not pick any rank-reserved card
-                r_idx = np.logical_and(row_sums <= self._reserved_ranks, row_sums != 0)
-                table[r_idx, :] = 0
-                update_table = np.any(r_idx)
-
-            if color is None:
-                # if no color is specified, do not pick any rank-reserved card
-                col_sums = np.sum(table, axis=0)
-                c_idx = np.logical_and(col_sums <= self._reserved_colors, col_sums != 0)
-                table[:, c_idx] = 0
-                update_table = update_table or np.any(c_idx)
+            col_sums = np.sum(table, axis=0)
+            c_idx = np.logical_and(col_sums <= self._reserved_colors, col_sums != 0)
+            if color_known:
+                c_idx[color] = False
+            table[:, c_idx] = 0
+            update_table = update_table or np.any(c_idx)
 
             iterations += 1
             if iterations > max_iterations:
