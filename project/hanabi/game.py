@@ -4,6 +4,7 @@ import GameData
 import logging
 from constants import SEED
 
+
 class Card(object):
     def __init__(self, id, value, color) -> None:
         super().__init__()
@@ -73,7 +74,8 @@ class Game(object):
         "Meh!",
         "Good!",
         "Outstanding!",
-        "AMAZING!"
+        "AMAZING!",
+        "YOU'RE THE BEST!"
     ]
     __cards = []  # cards are the same for everyone
     __MAX_NOTE_TOKENS = 8
@@ -224,8 +226,8 @@ class Game(object):
     # Show request
     def __satisfyShowCardRequest(self, data: GameData.ClientGetGameStateRequest):
         logging.info("Showing hand to: " + data.sender)
-        currentPlayer, playerList = self.__getPlayersStatus(data.sender)
-        return (GameData.ServerGameStateData(currentPlayer, playerList, self.__noteTokens, self.__stormTokens, self.__tableCards, self.__discardPile), None)
+        currentPlayer, playerList, playerHandSize = self.__getPlayersStatus(data.sender)
+        return (GameData.ServerGameStateData(currentPlayer, playerHandSize, playerList, self.__noteTokens, self.__stormTokens, self.__tableCards, self.__discardPile), None)
 
     # Play card request
 
@@ -251,7 +253,6 @@ class Game(object):
                         self.__noteTokens -= 1
                         logging.info("Giving 1 free note token.")
                 self.__nextTurn()
-                self.__gameOver, self.__score = self.__checkGameEnded()
                 # ! ADDED last param. see GameData relative comment of GameData.ServerPlayerMoveOk
                 return (None, GameData.ServerPlayerMoveOk(self.__getCurrentPlayer().name, p.name, card, data.handCardOrdered, len(p.hand)))
         else:
@@ -353,15 +354,17 @@ class Game(object):
 
     def __getPlayersStatus(self, currentPlayerName):
         players = []
+        handSize = 0
         for p in self.__players:
             #! I WANT ALSO THE ABSOLUTE ORDER OF PLAYERS
             if p.name == currentPlayerName:  # ! we don't want to cheat
                 # ! so we build an 'empty' Player object for the requesting player
                 tmp_player = Player(currentPlayerName)
                 players.append(tmp_player)
+                handSize = len(p.hand)
             else:
                 players.append(p)
-        return (self.__players[self.__currentPlayer].name, players)
+        return (self.__players[self.__currentPlayer].name, players, handSize)
 
     def __getPlayer(self, currentPlayerName: str) -> Player:
         for p in self.__players:
@@ -428,8 +431,7 @@ class Game(object):
         for pile in self.__tableCards:
             ended = ended and self.__checkFinishedFirework(pile)
         if ended:
-            score = 25
-            return True, score
+            return True, 25
         if self.__stormTokens == self.__MAX_STORM_TOKENS:
             return True, 0
         ended = self.__lastTurn and self.__lastMoves == 0
@@ -438,7 +440,6 @@ class Game(object):
             for pile in self.__tableCards:
                 # ! BUGFIX # instead of 'len(pile)' --> 'pile' is the key (eg. 'red')
                 score += len(self.__tableCards[pile])
-            print('Score: ' + str(score))
             return True, score
         return False, 0
 

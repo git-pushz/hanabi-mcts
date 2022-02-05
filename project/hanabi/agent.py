@@ -1,1121 +1,117 @@
-import inspect
-
-import GameData
+from typing import List, Any
+import random
 import numpy as np
-import copy
-import sys
-from game import Card
-from collections import deque
-import time
 from constants import SEED
+from game_state import GameState
+from utils import Card, Color, color_enum2str, color_str2enum
+from mcts import MCTS
+import GameData
+from hyperparameters import MCTS_ITERATIONS, MCTS_TIME_BUDGET
 
 DEBUG = False
-HINT_DEBUG = False
 VERBOSE = True
-LOG = True
-TIME = False
-
-
-def get_size(obj, seen=None):
-    """Recursively finds size of objects in bytes"""
-    size = sys.getsizeof(obj)
-    if seen is None:
-        seen = set()
-    obj_id = id(obj)
-    if obj_id in seen:
-        return 0
-    # Important mark as seen *before* entering recursion to gracefully handle
-    # self-referential objects
-    seen.add(obj_id)
-    if hasattr(obj, '__dict__'):
-        for cls in obj.__class__.__mro__:
-            if '__dict__' in cls.__dict__:
-                d = cls.__dict__['__dict__']
-                if inspect.isgetsetdescriptor(d) or inspect.ismemberdescriptor(d):
-                    size += get_size(obj.__dict__, seen)
-                break
-    if isinstance(obj, dict):
-        size += sum((get_size(v, seen) for v in obj.values()))
-        size += sum((get_size(k, seen) for k in obj.keys()))
-    elif hasattr(obj, '__iter__') and not isinstance(obj, (str, bytes, bytearray)):
-        size += sum((get_size(i, seen) for i in obj))
-
-    if hasattr(obj, '__slots__'):  # can have __slots__ with __dict__
-        size += sum(get_size(getattr(obj, s), seen) for s in obj.__slots__ if hasattr(obj, s))
-
-    return size
-
-
-colors = ["red", "yellow", "green", "blue", "white"]
-card_states = ["none",  # default state for each card
-               "playable",  # card is playable (i.e. it's the next useful rank for its color on the table stack)
-               "expendable",  # card can be possibly discarded (it's not the only one in the deck)
-               "useless",  # card can be surely discarded (it has already been played)
-               "risky"]  # card is the only one in the deck (opposite of expendable)
-
-HAND_SIZE = 5
-CARD_QUANTITIES = [3, 2, 2, 2, 1]
+LOG = False
 
 
 class Agent:
-    """
-    Our AI Hanabi agent player
-
-    Attributes:
-        name: The name of the agent
-        currentPlayer: name of the current player in the game
-        players: A list of the players' names in turn order
-        nr: The position of the (agent) player in the round
-        hands: A dictionary where the key is the name of a player and the value is the corresponding hand (list of cards)
-        knowledge: Global MentaState of the agent (knowledge['player_name'][card position][card_color][card_rank])
-        trash: A card list representing the trash
-        played: A card list representing the played cards
-        board: A list representing the fireworks on the table (board[color_idx] is the value of the highest card for the color)
-        hints: The number of used note tokens
-        errors: The number of used storm tokens
-        last_action: The last performed action (card played/discarded) known to the agent
-    """
-
-    __COMPARE_BOARD = np.array([[3, -1, 0, 0, 0],
-                                [-1, 2, 1, 0, 0],
-                                [-1, 1, 1, 0, 0],
-                                [-1, -1, -1, 1, 1],
-                                [-1, -1, 0, 1, 0]])
-    # __COMPARE_BOARD = np.array([[3, 0, 0, 0, 0],
-    #                             [0, 2, 0, 0, 0],
-    #                             [0, 0, 1, 0, 0],
-    #                             [0, 0, 0, 0, 0],
-    #                             [0, 0, 0, 0, 0]])
-
-    __GOALS_LABELS = ['play', 'discard', 'maydiscard', 'protect', 'keep']
-
-    class MentalState:
-        """
-        Mental state representation for a single card in a player's hand.
-
-        Attributes:
-            table:  A 2D numpy array representing the possible values of the card.
-                    table[r][c] contains the number of cards with rank 'r' and color 'c' that
-                    have not been discovered yet and whose value may be the one of the card.
-                    (i.e. (table[r][c] / np.sum(table)) is the probability that the card's
-                    value is table[r][c])
-            state:  The state of the card, according to the Agent's knowledge.
-                    (the possible values are the ones contained in the 'card_states' list)
-            agent:  The agent that "owns" this mental state (i.e. card)
-        """
-
-        def __init__(self, agent, card_index=None, player=None):
-            col = np.array(CARD_QUANTITIES)
-            col = col.reshape(col.size, 1)
-            self.table = np.tile(col, len(colors))
-            self.fully_determined = False
-            self.fully_determined_now = False
-            self.state = card_states[0]
-            self.agent = agent
-            self.player = player
-            if card_index is not None:
-                self.card_index = card_index
-            if LOG:
-                with open(self.agent.FILE, 'a') as f:
-                    f.write("just created new MS\n")
-                    f.write(self.to_string())
-
-        def __deepcopy__(self, memo={}):
-            cls = self.__class__
-            result = cls.__new__(cls)
-            # del result.table
-            result.table = np.copy(self.table)
-            result.fully_determined = self.fully_determined
-            result.fully_determined_now = self.fully_determined_now
-            result.state = copy.copy(self.state)
-            result.agent = self.agent
-            result.player = self.player
-            if hasattr(self, 'card_index'):
-                result.card_index = self.card_index
-            return result
-
-        def rank_hint_received(self, rank: int):
-            """
-            Update the mental state when a rank hint is received for this card.
-            Calling this functions will fully determine the card's rank (setting all the other
-            ranks in self.table to 0) and update the card's state according to the new information
-
-            Args:
-                rank: the rank of the card
-            """
-            rank -= 1
-            if LOG:
-                old = self.to_string()
-            i = [j for j in range(HAND_SIZE) if j != rank]
-            self.table[i, :] = 0
-            self.update_card_state()
-            if LOG:
-                with open(self.agent.FILE, 'a') as f:
-                    f.write(f"\nTurn {self.agent.turn} rank {rank + 1} hint received (from 1 to 5):\n")
-                    f.write("Before:\n")
-                    f.write(old)
-                    f.write("After:\n")
-                    f.write(self.to_string())
-                    if not np.any(self.table):
-                        f.write('*'*40)
-                        f.write('\nALL ZEROS\n')
-
-        def color_hint_received(self, color: int):
-            """
-            Update the mental state when a color hint is received for this card.
-            Calling this functions will fully determine the card's color (setting all the other
-            colors in self.table to 0) and update the card's state according to the new information
-
-            Args:
-                color: the index of the color in the list 'colors'
-            """
-            if type(color) is str:
-                color = colors.index(color)
-            if LOG:
-                old = self.to_string()
-
-            i = [j for j in range(HAND_SIZE) if j != color]
-            self.table[:, i] = 0
-            self.update_card_state()
-
-            if LOG:
-                with open(self.agent.FILE, 'a') as f:
-                    f.write(f"Turn {self.agent.turn} color {colors[color]} hint received:\n")
-                    f.write("Before:\n")
-                    f.write(old)
-                    f.write("After:\n")
-                    f.write(self.to_string())
-                    if not np.any(self.table):
-                        f.write('*'*40)
-                        f.write('\nALL ZEROS\n')
-
-        def card_drawn(self, rank: int, color: int, is_template=False):
-            """
-            Remove a new discovered card from the "possibilities" of this card
-            (i.e. self.table[rank][color] will be decremented by 1)
-
-            Args:
-                rank:   the rank of the new discovered card
-                color:  the index of new discovered card's color in the list 'colors'
-                is_template:
-            """
-            rank -= 1
-            if LOG:
-                old = self.to_string()
-            # self.table[rank, color] must be > 0
-            # this assertion is technically wrong, if someone received an hint on a 4, all rows a part from the 4th
-            # will become 0, but this doesn't mean that there are no more 3s around
-            # assert(self.table[rank, color] > 0)
-            if self.table[rank, color] == 0:
-                return
-            ## TODO
-            self.table[rank, color] -= 1
-            if np.any(self.table < 0):
-                print("******NEGATIVE******")
-            if is_template:
-                return
-            self.update_card_state()
-            if LOG:
-                with open(self.agent.FILE, 'a') as f:
-                    f.write(f"Turn {self.agent.turn} discovered card {rank + 1} {colors[color]}:\n")
-                    f.write("Before:\n")
-                    f.write(old)
-                    f.write("After:\n")
-                    f.write(self.to_string())
-                    if not np.any(self.table):
-                        f.write('*'*40)
-                        f.write('\nALL ZEROS\n')
-
-        def update_card_state(self):
-            """
-            Update the card's state according to the currently known information
-            (stored in self.table)
-            """
-            if self.state == "useless":
-                return
-            r, c = np.nonzero(self.table)
-            # r is a numpy array of the row (=rank) indices of nonzero entries of self.table
-            # r is a numpy array of the row (=rank) indices of nonzero entries of self.table
-            # c is a numpy array of the column (=color) indices of nonzero entries of self.table
-
-            # UPDATE: FROM PLAYABLE, A CARD CAN ONLY BECOME USELESS OR RISKY -> COVER THE CASE OF EXPENDABLE
-            if VERBOSE:
-                if len(r) == 0 and len(c) == 0:
-                    print("ERROR: MENTAL STATE TOTALLY EMPTY")
-            if len(r) == 1 and len(c) == 1:  # I know both
-                r, c = r[0] + 1, c[0]
-                self.fully_determined = True
-                self.fully_determined_now = True
-                if self.agent.board[c] == self.agent.maximums[c]:
-                    self.state = "useless"
-                    return
-                elif self.agent.board[c] == r - 1:
-                    self.state = "playable"
-                    return
-                elif self.agent.board[c] >= r:
-                    self.state = "useless"
-                    return
-                elif self.agent.maximums[c] < r - 1:
-                    self.state = "useless"
-                    return
-                elif self.table[r - 1, c] == 1:
-                    self.state = "risky"
-                    return
-                elif self.table[r - 1, c] > 1 and self.state != 'playable':
-                    self.state = "expendable"
-                    return
-                else:
-                    if DEBUG:
-                        print("Should not be here")
-                        print(f"rank: {r}, color: {colors[c]} (index {c})")
-                        print(f"Mental State of current card:\n {self.table}")
-            elif len(np.unique(r)) == 1:  # I know only the rank
-                r = r[0] + 1
-                if np.max(self.agent.board) == np.min(self.agent.board) == r - 1:
-                    self.state = "playable"
-                    return
-                elif np.min(self.agent.board) >= r:
-                    self.state = "useless"
-                    return
-                elif np.max(self.agent.maximums) < r - 1:
-                    self.state = "useless"
-                    return
-                elif np.max(self.table[r - 1, :]) == 1:
-                    self.state = "risky"
-                    return
-                elif np.min(self.table[r - 1, :]) > 1 and self.state != 'playable':
-                    self.state = "expendable"
-                    return
-                # the state remains "none"
-                # else:
-                # print("Should not be here")
-                # print(f"rank: {r}")
-                # print(f"Mental State of current card:\n {self.table}")
-            elif len(np.unique(c)) == 1:  # I know only the color
-                c = c[0]
-                if self.agent.board[c] == self.agent.maximums[c]:
-                    self.state = "useless"
-                    return
-                elif np.max(self.table[:, c]) == 1:
-                    self.state = "risky"
-                    return
-                elif np.min(self.table[:, c]) > 1 and self.state != 'playable':
-                    self.state = "expendable"
-                    return
-                # the state remains "none"
-                # else:
-                #     if self.fully_determined:
-                #         print("Should not be here")
-                #         print(f"color: {colors[c]} (index {c})")
-                #         print(f"Mental State of current card:\n {self.table}")
-            else:  # I know nothing
-                if np.max(self.table) == 1:
-                    self.state = "risky"
-                    return
-                elif np.min(self.table) > 1 and self.state != 'playable':
-                    self.state = "expendable"
-                    return
-                else:
-                    if self.state != "none":
-                        print("Should not be here")
-
-        def get_table(self):
-            """
-            Return the mental state representation of the card (2D numpy array)
-            """
-            return self.table
-
-        def is_fully_determined_now(self):
-            """
-            Return whether the current MS is fully determined now, fully determined and possibly its color and rank
-            IMPORTANT: THE RANK IS ZERO BASED
-            """
-            if self.fully_determined_now:
-                r, c = np.nonzero(self.table)
-                assert len(r) == len(c) == 1, "card isn't actually fully determined"
-                return True, self.fully_determined, r[0], c[0]
-            else:
-                return False, self.fully_determined, None, None
-
-        def reset_fully_determined_now(self):
-            """
-            Reset to False the fully_determined_now field
-            """
-            self.fully_determined_now = False
-
-        def to_string(self) -> str:
-            if self.card_index is not None:
-                if not hasattr(self, 'player') or self.player is None:
-                    player = "***PLAYER***"
-                else:
-                    player = self.player
-                s = f">MS of player {player} at card index {self.card_index}\n"
-            else:
-                s = ''
-            s += "   r   y   g   b   w\n"
-            s += '\n'.join([''.join(['{:4}'.format(item) for item in row]) for row in self.table])
-            s += '\n'
-            if VERBOSE or LOG:
-                s += '\t' + 'state: ' + self.state + '\n'
-            return s
-
-    class PlayerMentalState:
-        """
-        The mental states of all the cards in a player's hand
-
-        Attributes:
-            ms_hand: A list of mental states, one for each card in the player's hand
-            agent: The agent this instance is referring to
-        """
-
-        def __init__(self, agent, player=None):
-            self.ms_hand = [Agent.MentalState(agent, i, player) for i in range(HAND_SIZE)]
-            self.agent = agent
-
-        def __deepcopy__(self, memo={}):
-            cls = self.__class__
-            result = cls.__new__(cls)
-            # del result.ms_hand
-            result.ms_hand = copy.deepcopy(self.ms_hand)
-            result.agent = self.agent
-            return result
-
-        def update_whole_hand(self, rank: int, color: int, fully_determined=None):
-            """
-            Update all the mental states of the agent's hand when a new card is discovered
-
-            Args:
-                rank:   the rank of the new discovered card
-                color:  the index of new discovered card's color in the list 'colors'
-                fully_determined: whether the card was fully determined or not
-            """
-            # rank -= 1
-            if fully_determined is None:
-                for c in self.ms_hand:
-                    c.card_drawn(rank, color)
-            else:
-                for c in self.ms_hand:
-                    # decrease value of other cards in agent's hand if a recent fully determined card is detected
-                    # (the recent FD cards must not be decreased)
-                    if not c.fully_determined_now:
-                        ## TODO
-                        c.get_table()[rank, color] -= 1
-                        if np.any(c.table < 0):
-                            print("****NEGATIVE****")
-
-        # def reset_recent_fully_determined_cards(self):
-        #     """
-        #     This function reset to False the fully_determined_now attribute of each card of a Player's hand
-        #     """
-        #     for card in self.ms_hand:
-        #         if card.fully_determined_now:
-        #             card.fully_determined_now = False
-
-        def update_card(self, card_index: int, rank: int = None, color: int = None):
-            """
-            Update the mental state of a card in the player's hand when a hint for it is received.
-            (WARNING: only one between 'rank' and 'color' must be set)
-
-            Args:
-                card_index: the index of the card in the hand
-                rank:       the rank of the card
-                color:      the index of card's color in the list 'colors'
-            """
-            assert ((rank is None) != (color is None))
-            if rank is None:
-                self.ms_hand[card_index].color_hint_received(color)
-            else:
-                self.ms_hand[card_index].rank_hint_received(rank)
-
-        def get_cards_from_state(self, state: str):
-            """
-            Get the hand's cards that have a certain state
-
-            Args:
-                state: the index of the state in the 'card_states' list
-
-            Returns:
-                A list of indices of the cards in the specified state inside the hand
-            """
-            return [idx[0] for idx, card in np.ndenumerate(self.ms_hand) if card.state == state]
-
-        def get_new_fully_determined_cards(self):
-            """
-            Return the index of all RECENT Fully Determined cards in a hand/PlayerMentalState, specifically a list of MentalStates
-            """
-            return [idx for idx, card in enumerate(self.ms_hand) if
-                    (card.fully_determined and card.fully_determined_now)]
-
-        def get_card_from_index(self, index: int):
-            """
-            Return a mental state of a card given the index of it in a hand/PlayerMentalState
-            """
-            return self.ms_hand[index]
-
-        def reset_card_mental_state(self, card_index: int, player_ms_template):
-            """
-            Reset the specified card mental state with the template mental state of the player
-            """
-            if DEBUG:
-                print("removing card at index from mental state", card_index)
-            old_ms = self.ms_hand.pop(card_index)
-            del old_ms
-            if DEBUG:
-                print("appending the mental state template")
-                print(player_ms_template.to_string())
-            for i in range(HAND_SIZE-1):
-                self.ms_hand[i].card_index = i
-            ms: Agent.MentalState = copy.deepcopy(player_ms_template)
-            ms.card_index = HAND_SIZE-1
-            self.ms_hand.append(ms)
-
-        def to_string(self) -> str:
-            s = ''
-            for i in range(HAND_SIZE):
-                s += self.ms_hand[i].to_string()
-                s += '\n'
-            return s
-
-    class MentalStateGlobal:
-        """
-        The PlayerMentalStates for all the players in the game,
-        according to the knowledge of the agent
-
-        Attributes:
-            matrix: A dictionary where the key is a player's name and
-                    the value the corresponding PlayerMentalState
-            agent:  The agent this instance is referring to
-        """
-
-        def __init__(self, hands: dict, agent):
-            self.matrix = {k: Agent.PlayerMentalState(agent, k) for k in hands.keys()}
-            # it is used to store information of the past knowledge of the match
-            # used as the starting mental state for newly drawn cards by the agent
-            # it is updated in 3 cases:
-            # at MentalStateGlobal initialization X
-            # when a card is drawn X
-            # when a card of the agent hand is fully determined
-            self.templates_ms = {k: Agent.MentalState(agent, 'TEMPLATE', k) for k in hands.keys()}
-            self.agent = agent
-
-            for name, hand in hands.items():
-                for card in hand:
-                    for n in hands.keys():
-                        if n != name:
-                            self.templates_ms[n].card_drawn(card.value, colors.index(card.color), True)
-                            self.matrix[n].update_whole_hand(card.value, colors.index(card.color))
-
-        def update_templates_ms(self):
-            """
-            Update mental state template of each player
-            """
-            # it actually re-computes it
-            self.templates_ms = {k: Agent.MentalState(self.agent, 'TEMPLATE', k) for k in self.agent.hands.keys()}
-            for name, hand in self.agent.hands.items():
-                for card in hand:
-                    for n in self.agent.hands.keys():
-                        if n != name:
-                            self.templates_ms[n].card_drawn(card.value, colors.index(card.color), True)
-                for card in self.agent.trash:
-                    self.templates_ms[name].card_drawn(card.value, colors.index(card.color), True)
-                for i, pile in enumerate(self.agent.board):
-                    for rank in range(pile):
-                        self.templates_ms[name].card_drawn(rank + 1, i, True)
-
-        def card_discovered(self, hands: dict, last_player: str, old_card: Card, new_card: Card = None):
-            """
-            Update the PlayerMentalState of all the players when a card is played/discarded
-            and a new one is taken from the deck.
-            For the player who just performed the action the discovered card will be the played/discarded one,
-            while for all the other players it will be the drawn one.
-
-            Args:
-                hands:          A dictionary where the key is the name of a player ad the value
-                                is the corresponding hand (list of cards)
-                last_player:    The name of the player who performed the last action
-                old_card:       The played/discarded card
-                new_card:       The drawn card
-            """
-            self.matrix[last_player].update_whole_hand(old_card.value, colors.index(old_card.color))
-            if DEBUG:
-                print("discarded/ played card", old_card)
-            # new card is optional because if the player who played/ discarded the card is the agent, there is
-            # no way to know which card it draw
-            if new_card is None:
-                return
-            for name in hands.keys():
-                if name != last_player:
-                    self.matrix[name].update_whole_hand(new_card.value, colors.index(new_card.color))
-            if DEBUG:
-                print("drawn card", new_card)
-
-        def player_mental_state(self, player_name):
-            """
-            Get the PlayerMentalState of a certain player
-
-            Args:
-                player_name: The name of the player whose PlayerMentalState must be retrieved
-
-            Returns:
-                The PlayerMentalState of the desired player
-            """
-            return self.matrix[player_name]
-
-        def player_template_ms(self, player_name):
-            """
-            Return the template for a new card of player_name's hand
-
-            Args:
-                player_name: the name of the player
-            """
-            return self.templates_ms[player_name]
-
-        def to_string(self, print_templates=False) -> str:
-            s = ''
-            for k, v in self.matrix.items():
-                s += f"Player {k}:\n"
-                s += v.to_string()
-                s += '-' * 30
-                s += '\n'
-
-            if print_templates:
-                for k, v in self.templates_ms.items():
-                    s += f"template player {k}:\n{v.to_string()}\n"
-
-            return s
-
-    class LastAction:
-        """
-        Some informations about the last action (card played/discarded)
-        performed in the game by a player
-
-        Attributes:
-            last_player:    The name of the player who performed the last action
-            card_index:     The index of the played/discarded card in the last_player's hand
-        """
-
-        def __init__(self):
-            self.last_player = None
-            self.card_index = None
-
-        def update_last_action(self, last_player: str, card_index: int, card):
-            self.last_player = last_player
-            self.card_index = card_index
-            self.card = card
-
-    # AGENT INIT
-    def __init__(self, name: str, data: GameData.ServerGameStateData, players_names: list):
-        global HAND_SIZE
-        """
-        Create a new Agent
-
-        Args:
-            name: The name of the agent
-            data: The game state to use to initialize the Agent
-            players_names: The list of players names in turn order
-        """
-        np.random.seed(SEED)
+    def __init__(
+        self, name: str, data: GameData.ServerGameStateData, players_names: list
+    ) -> None:
         self.name = name
-        if LOG:
-            self.FILE = f"LOG{self.name}.log"
-            with open(self.FILE, 'w') as f:
-                f.write(f"BEGIN LOG OF PLAYER {self.name}\n")
-        # name of the current player
-        self.currentPlayer = data.currentPlayer
-        # list of players in turn order
-        self.players = players_names
-        if len(players_names) >= 4:
-            HAND_SIZE = 4
-            self.max_hand_size = 4
+        self._game_state = GameState(players_names, name, data)
+        self.turn = 0
+        self.hand_size = 5 if len(players_names) < 4 else 4
+        if SEED is not None:
+            np.random.seed(SEED)
+            random.seed(SEED)
+
+    def make_move(self) -> GameData.ClientToServerData:
+        """ """
+        self.turn += 1
+        mcts = MCTS(self._game_state, self.name)
+        # move = mcts.run_search(iterations=MCTS_ITERATIONS)
+        # move = mcts.run_search(time_budget=MOVE_TIME_BUDGET)
+        move = mcts.run_search(time_budget=MCTS_TIME_BUDGET, iterations=MCTS_ITERATIONS)
+        if move.action_type == "hint":
+            hint_value = (
+                move.hint_value
+                if move.hint_type == "value"
+                else color_enum2str[move.hint_value]
+            )
+            return GameData.ClientHintData(
+                self.name, move.destination, move.hint_type, hint_value
+            )
+        elif move.action_type == "play":
+            return GameData.ClientPlayerPlayCardRequest(self.name, move.card_idx)
+        elif move.action_type == "discard":
+            return GameData.ClientPlayerDiscardCardRequest(self.name, move.card_idx)
         else:
-            self.max_hand_size = 5
-        # position of the player in the round
-        self.nr = self.players.index(self.name)
-        self.turn = self.nr+1
-        # hands[player_name] = list of cards
-        self.hands = {player.name: player.hand for player in data.players}
-        self.hands[self.name] = []
-        # knowledge['player_name'][card position][card_color][card_rank]
-        self.knowledge = Agent.MentalStateGlobal(self.hands, self)
-        self.trash = []
-        self.played = []
-        # list of cards that are currently on the top of each stack on the board
-        self.board = [0] * 5
-        self.hints = data.usedNoteTokens
-        self.errors = data.usedStormTokens
-        self.last_action = Agent.LastAction()
-        self.maximums = [5] * 5
-        self.__hint_history = deque(maxlen=4)
+            raise RuntimeError(f"Unknown action type received: {move.action_type}")
 
-    def make_move(self):
+    def discover_own_card(self, card, card_idx: int, action_type: str = None) -> None:
         """
-        Perform the best possible move according to the Agent's knowledge
-
-        Returns:
-            A GameData object representing the chosen move
-        """
-        self.turn += len(self.players)
-        if VERBOSE:
-            print(f"Player {self.name}:")
-            print(f"\tBoard:\n[")
-            for i, b in enumerate(self.board):
-                print(f"\t{colors[i]}: {b}")
-            print("]")
-            print(f"\tTrash: {self.trash}")
-            print(f"\tHands: {self.hands}")
-            print(f"\tHints used: {self.hints}")
-            print(f"\tErrors made: {self.errors}")
-
-        if LOG:
-            with open(self.FILE, 'a') as f:
-                f.write(f"\tBoard:\n[\n")
-                for i, b in enumerate(self.board):
-                    f.write(f"\t{colors[i]}: {b}\n")
-                f.write("]\n")
-                f.write(f"\tHands: {self.hands}\n")
-                f.write(f"\tTrash: {self.trash}\n")
-                f.write('§'*40)
-                f.write(f"\nMY KNOWLEDGE AT TURN {self.turn}:\n")
-                f.write(self.knowledge.to_string())
-                f.write('\n')
-                f.write('§'*30)
-                f.write('\n')
-
-        cards = self.knowledge.player_mental_state(self.name).get_cards_from_state("playable")
-        if DEBUG:
-            print("cards_from_state", cards)
-        if len(cards) > 0:
-            if DEBUG:
-                print("played a playable card")
-            return GameData.ClientPlayerPlayCardRequest(self.name, cards[0])
-        cards = self.knowledge.player_mental_state(self.name).get_cards_from_state("useless")
-        if len(cards) > 0 and self.hints > 0:
-            if DEBUG:
-                print("discarded a useless card")
-            return GameData.ClientPlayerDiscardCardRequest(self.name, cards[0])
-        if self.hints < 8:
-            exc_time = time.time()
-            best_hint = self.decide_hint()
-            if LOG and TIME:
-                with open(self.FILE, 'a') as f:
-                    f.write(f"At turn {self.turn} the decide_hint function took {int(time.time() - exc_time)} seconds\n")
-        else:
-            best_hint = None
-        if best_hint is not None:
-            if DEBUG:
-                print("giving a hint to the player: ", best_hint[2])
-            return GameData.ClientHintData(self.name, best_hint[2], best_hint[0], best_hint[1])
-        if DEBUG:
-            print("no good hint found..")
-
-        exc_time = time.time()
-        assert self.hints > 0, "I'm going to try to discard with zero used tokens"
-        discard_action = self.discard()
-        if LOG and TIME:
-            with open(self.FILE, 'a') as f:
-                f.write(f"At turn {self.turn} the discard function took {int(time.time() - exc_time)} seconds\n")
-        return discard_action
-
-    def discard(self):
-        # Reminder -> card_states = ["none", "playable","expendable","useless","risky"]
-
-        # check if there are some useless cards in agent's hand...
-        cards = self.knowledge.player_mental_state(self.name).get_cards_from_state("useless")
-        if len(cards) > 0:
-            if DEBUG:
-                print("discarded a useless card")
-            return GameData.ClientPlayerDiscardCardRequest(self.name, np.random.choice(cards))
-
-        # ...if not check if there are some expendable cards in agent's hand
-        cards = self.knowledge.player_mental_state(self.name).get_cards_from_state("expendable")
-        if len(cards) == 1:
-            if DEBUG or VERBOSE:
-                print("discarded an expendable card")
-            return GameData.ClientPlayerDiscardCardRequest(self.name, cards[0])
-        if len(cards) > 0:
-            # if agent has more than one expendable card in hand, discard the one with the highest rank
-            ranks_list = []
-            for card_index in cards:
-                # get ranks of expendable cards and add them to a list
-                rank, color = np.nonzero(
-                    self.knowledge.player_mental_state(self.name).get_card_from_index(card_index).get_table())
-                if len(rank) == 0:
-                    print("==="*20)
-                ranks_list.append((rank[0] + 1))
-            # get the index of the max rank in the list, which is the same index of the corresponding card index in exp_cards
-            to_discard = ranks_list.index(max(ranks_list))
-            if DEBUG or VERBOSE:
-                print("discarded an expendable card")
-            return GameData.ClientPlayerDiscardCardRequest(self.name, cards[to_discard])
-
-        # if here better discard a none card than a risky one, specifically the oldest one
-        cards = self.knowledge.player_mental_state(self.name).get_cards_from_state("none")
-        if len(cards) > 0:
-            if DEBUG:
-                print("discarded a none card")
-            return GameData.ClientPlayerDiscardCardRequest(self.name, cards[0])
-
-        # last option, discard a risky one
-        cards = self.knowledge.player_mental_state(self.name).get_cards_from_state("risky")
-        if len(cards) > 0:
-            if DEBUG:
-                print("discarded a risky card")
-            return GameData.ClientPlayerDiscardCardRequest(self.name, np.random.choice(cards))
-
-        print("HERE", '+'*50)
-
-    def decide_hint(self):
-        """
-        Return an action, a tuple with action[0] = "value" or "color" and action[1] the rank or the color value
-        and action[2] the destination player
-        the action represents the best hint calculated by the agent (== None if no good hint has been found)
-        """
-        if DEBUG:
-            print("deciding if there is any good hint to give...")
-        best_score = -1
-        best_action = None
-        if DEBUG:
-            print(self.hands)
-        for name, hand in self.hands.items():
-            maxscore = -1
-            best_player_score = -1
-            action = None
-            best_player_action = None
-            if name != self.name:
-                # goals = ["play", "discard", "maydiscard", "protect", "keep"]
-                exc_time = time.time()
-                goals = self.calculate_goals(hand)
-                if LOG and TIME:
-                    with open(self.FILE, 'a') as f:
-                        f.write(f"At turn {self.turn} the calculate_goals function for player {name} took {int(time.time() - exc_time)} seconds\n")
-                if DEBUG or HINT_DEBUG:
-                    print(" ")
-                    print("for player ", name, "calculated the goals:")
-                    print(goals)
-                for c in colors:
-                    exc_time = time.time()
-                    move = self.predict(self.knowledge.player_mental_state(name), ("color", c), hand)
-                    if LOG and TIME:
-                        with open(self.FILE, 'a') as f:
-                            f.write(
-                                f"At turn {self.turn} the predict function for player {name} and color {c} took {int(time.time() - exc_time)} seconds\n")
-                    if DEBUG or HINT_DEBUG:
-                        print(" for color", c, "predicted the moves:")
-                        print(" ", move)
-                    exc_time = time.time()
-                    score = self.compare(move, goals)
-                    if LOG and TIME:
-                        with open(self.FILE, 'a') as f:
-                            f.write(
-                                f"At turn {self.turn} the compare function for player {name} and color {c} took {int(time.time() - exc_time)} seconds\n")
-                    if DEBUG or HINT_DEBUG:
-                        print("  score of the hint:", score, "maxscore: ", maxscore)
-                        print(" ")
-                    if score > maxscore:
-                        maxscore = score
-                        action = ("color", c, name)
-                for rank in range(1, 6):
-                    exc_time = time.time()
-                    move = self.predict(self.knowledge.player_mental_state(name), ("value", rank), hand)
-                    if LOG and TIME:
-                        with open(self.FILE, 'a') as f:
-                            f.write(
-                                f"At turn {self.turn} the predict function for player {name} and rank {rank} took {int(time.time() - exc_time)} seconds\n")
-                    if DEBUG or HINT_DEBUG:
-                        print(" for rank", rank, "predicted the moves:")
-                        print(" ", move)
-                    exc_time = time.time()
-                    score = self.compare(move, goals)
-                    if LOG and TIME:
-                        with open(self.FILE, 'a') as f:
-                            f.write(
-                                f"At turn {self.turn} the compare function for player {name} and rank {rank} took {int(time.time() - exc_time)} seconds\n")
-                    if DEBUG or HINT_DEBUG:
-                        print("  score of the hint:", score, "maxscore: ", maxscore)
-                        print(" ")
-                    if score > maxscore:
-                        maxscore = score
-                        action = ("value", rank, name)
-                if maxscore > 0:
-                    best_player_action = action
-                    best_player_score = maxscore
-            if best_player_score > best_score and best_player_action not in self.__hint_history:
-                best_score = best_player_score
-                best_action = best_player_action
-            if DEBUG or HINT_DEBUG:
-                print("final score:", best_score)
-                print("best action: ", best_action)
-
-        if best_action is None and self.hints == 0:
-            print(f"History: {self.__hint_history}")
-            players = list(self.hands.keys())
-            players.remove(self.name)
-            player = np.random.choice(players)
-            action = np.random.choice(["value", "color"])
-            if action == "value":
-                value = np.random.choice([c.value for c in self.hands[player]])
-            else:
-                value = np.random.choice([c.color for c in self.hands[player]])
-            best_action = (action, value, player)
-            print("BEST ACTION: ", best_action)
-
-        self.__hint_history.appendleft(best_action)
-        return best_action
-
-    def calculate_goals(self, hand):
-        """
-        Return goals, a list that map for each card of the player hand a goal based on the full knowledge the agent
-        has about the player hand
-        """
-        goals = []
-        for card in hand:
-            if self.compute_card_state(card) == "playable":
-                goals.append("play")
-            elif self.compute_card_state(card) == "useless":
-                goals.append("discard")
-            elif self.compute_card_state(card) == "expendable":
-                goals.append("maydiscard")
-            elif self.compute_card_state(card) == "risky":
-                goals.append("protect")
-            else:
-                goals.append("keep")
-        return goals
-
-    # action object examples: ("value", 2) or ("color", "red")
-    def predict(self, player_ms: PlayerMentalState, action, hand):
-        global LOG
-        """
-        Returns predictions, a mapping for every card in player hand to a predicted action (the action
-        the agent expect the player to play if given the hint represented by the input object action
-        """
-        # TODO: add the check that an hint that doesn't target a color or rank in the player hand can't be given
-        # and that an hint that give no new information (i.e. M' = M) can't be given
-        LOG = False
-        predictions = []
-        exc_time = time.time()
-        ms = copy.deepcopy(player_ms)
-        if LOG and TIME:
-            with open(self.FILE, 'a') as f:
-                f.write(f"Size of object to deepcopy: {get_size(player_ms)}\n")
-                f.write(f"At turn {self.turn} the deepcopy inside predict function took {int(time.time() - exc_time)} seconds\n")
-        if LOG:
-            with open(self.FILE, 'a') as f:
-                f.write("*" * 40)
-                f.write('\nTRYING HINTS\n')
-                f.write("*" * 40)
-                f.write('\n')
-        if action[0] == "value":
-            for i, card in enumerate(hand):
-                if card.value == action[1]:
-                    exc_time = time.time()
-                    ms.update_card(i, action[1], None)
-                    if LOG and TIME:
-                        with open(self.FILE, 'a') as f:
-                            f.write(
-                                f"At turn {self.turn} the update_card inside predict function for action (value {action[1]}) took {int(time.time() - exc_time)} seconds\n")
-
-        else:
-            for i, card in enumerate(hand):
-                if card.color == action[1]:
-                    exc_time = time.time()
-                    ms.update_card(i, None, action[1])
-                    if LOG and TIME:
-                        with open(self.FILE, 'a') as f:
-                            f.write(
-                                f"At turn {self.turn} the update_card inside predict function for action (color {action[1]}) took {int(time.time() - exc_time)} seconds\n")
-        for card_ms in ms.ms_hand:
-            exc_time = time.time()
-            card_ms.update_card_state()
-            if LOG and TIME:
-                with open(self.FILE, 'a') as f:
-                    f.write(
-                        f"At turn {self.turn} the update_card_state inside predict function took {int(time.time() - exc_time)} seconds\n")
-            if card_ms.state == "playable":
-                predictions.append("play")
-            elif card_ms.state == "useless":
-                predictions.append("discard")
-            elif card_ms.state == "expendable":
-                predictions.append("maydiscard")
-            elif card_ms.state == "risky":
-                predictions.append("protect")
-            else:
-                predictions.append("keep")
-
-        if LOG:
-            with open(self.FILE, 'a') as f:
-                f.write("*" * 40)
-                f.write('\nEND\n')
-                f.write("*" * 40)
-                f.write('\n')
-        LOG = True
-        return predictions
-
-    def compare(self, move, goals):
-        """
-        Return a score based on a comparison between the goals calculated by the agent and the move the agent predicted
-        the player would play (for each card) given a particular hint
-        """
-        # goals: what I would like the other player to do
-        # move: what the other player would do if he received the hint I'm considering in this iteration
-        score = 0
-        for i, goal in enumerate(goals):
-            if goal == move[i]:
-                if goal == "play":
-                    score += 3
-                elif goal == "discard":
-                    score += 2
-                elif goal == "maydiscard":
-                    score += 1
-                elif goal == "protect":
-                    score += 1
-            if goal != move[i]:
-                if goal == "discard" or goal == "maydiscard":
-                    if move[i] == "discard" or move[i] == "maydiscard":
-                        score += 1
-                elif goal == "keep" or goal == "protect":
-                    if move[i] == "keep" or move[i] == "protect":
-                        score += 1
-                else:
-                    return -1
-                # it means the player is playing a card they are not supposed to play
-                # or discarding a card they are not supposed to discard
-                # or keeping a card they are not supposed to keep
-                # if goal == "play" and move[i] == "discard":
-                #     return -1
-        # for goal, m in zip(goals, move):
-        #     score += Agent.__COMPARE_BOARD[Agent.__GOALS_LABELS.index(goal), Agent.__GOALS_LABELS.index(m)]
-        return score
-
-    def board_maximums(self):
-        """
-        Compute and return the maximum that each pile on the board can reach in the current game
-        """
-        trash_colors = dict.fromkeys(colors, [])
-        for card in self.trash:
-            trash_colors[card.color].append(card.value)
-
-        maximums = [5] * 5
-        for color in colors:
-            for i in range(0, 5):
-                if trash_colors[color].count(i + 1) == CARD_QUANTITIES[i]:
-                    maximums[colors.index(color)] = i
-                    break
-
-        return maximums
-
-    def compute_card_state(self, card):
-        """
-        Update the card's state according to the board, trash and other's player hand
-        it receive in input a card, not the mental state of the card
-        """
-        if self.board[colors.index(card.color)] == self.maximums[colors.index(card.color)]:
-            return "useless"
-        elif self.board[colors.index(card.color)] == card.value - 1:
-            return "playable"
-        elif self.board[colors.index(card.color)] >= card.value:
-            return "useless"
-        elif self.maximums[colors.index(card.color)] < card.value - 1:
-            return "useless"
-        if card.value == 5:
-            return "risky"
-        expendable = True
-        for t in self.trash:
-            if t.value == card.value and t.color == card.color:
-                expendable = False
-        # card.value == 1 is either playable or useless
-        if expendable:
-            return "expendable"
-        else:
-            return "risky"
-
-    def discover_card(self, card: Card, card_index: int, action_type: str):
-        """
-        Called whenever the agent plays or discards a card: if it wasn't fully determined, update the structures
+        Called whenever the agent plays or discards a card, this function update the deck knowledge if the discovered card is NOT fully determined.
 
         Args:
             card: the played/discarded card
-            card_index: the index of card in agent's hand
+            card_idx: the index of card in agent's hand
             action_type: it's one of ['play', 'mistake', 'discard'] FOR DEBUG ONLY
         """
-        ms = self.knowledge.player_mental_state(self.name)
-        card_ms: Agent.MentalState = ms.get_card_from_index(card_index)
-        if not card_ms.fully_determined:
-            # card wasn't fully determined
-            for index in range(HAND_SIZE):
-                if index != card_index:
-                    # self.knowledge.player_mental_state(self.name).update_whole_hand(card.value,
-                    #                                                                 colors.index(card.color),
-                    #                                                                 fully_determined=False)
-                    self.knowledge.player_mental_state(self.name).get_card_from_index(index).card_drawn(card.value,
-                                                                                                        colors.index(
-                                                                                                            card.color))
-                    fully_determined_now, fully_determined, rank, color = self.knowledge.player_mental_state(self.name) \
-                        .get_card_from_index(index).is_fully_determined_now()
-                    if fully_determined_now:
-                        for player in self.players:
-                            if player != self.name:
-                                self.knowledge.player_mental_state(player).update_whole_hand(rank, color,
-                                                                                             fully_determined)
+        self._game_state.root_card_discovered(
+            card_idx, card.value, color_str2enum[card.color]
+        )
 
-            for player in self.players:
-                if player != self.name:
-                    self.knowledge.player_mental_state(player).update_whole_hand(card.value, colors.index(card.color))
 
-            self.knowledge.update_templates_ms()
+    def track_discarded_card(self, player: str, card_idx: int) -> None:
+        self._game_state.card_discarded(player, card_idx)
 
-        else:
-            if action_type == 'mistake':
-                if DEBUG:
-                    print("Should not be here: made a mistake with a fully determined card.", file=sys.stderr)
+    def track_played_card(self, player: str, card_idx: int, correctly: bool) -> None:
+        self._game_state.card_played(player, card_idx, correctly)
 
-        # TODO: update agent's hand (fully det)
-        self.knowledge.player_mental_state(self.name).reset_card_mental_state(card_index,
-                                                                              self.knowledge.player_template_ms(
-                                                                                  self.name))
-        if DEBUG:
-            print(f"Hands: {self.hands}")
-            print(f"Mental states: {self.knowledge.to_string(print_templates=True)}")
+    def track_drawn_card(self, players: list) -> None:
+        """
 
-    def update_board(self, card: Card):
+        Track a card drawn by another player form the deck
         """
-        Update the representation of the board piles after a card is played correctly
-        Args:
-            card: the played card
-        """
-        self.played.append(card)
-        self.board[colors.index(card.color)] += 1
-        if self.board[colors.index(card.color)] == 5:
-            self.hint_gained()
+        different_hands = 0
+        new_card = None
+        player = None
+        for p in players:
+            if p.name != self.name:
+                if len(p.hand) != len(self._game_state.hands[p.name]):
+                    different_hands += 1
+                    # NB: newly drawn cards are appended to the right
+                    new_card = p.hand[-1]
+                    player = p.name
+        assert new_card is not None, "new card not found"
+        assert different_hands == 1, "too many different cards"
+        assert player != self.name, "Cannot discover my cards"
+        self._game_state.card_drawn(player, Card.from_server(new_card))
 
-    def update_trash(self, card: Card):
+    def draw_card(self) -> None:
         """
-        Update the representation of the trash after a card is played by mistake or is discarded
-        Args:
-            card: the discarded card
+        Draw a card from the deck. This will append a new unknwon
+        card (rank = None, color = None) to the agent's hand
         """
-        self.trash.append(card)
-        self.maximums = self.board_maximums()
+        self._game_state.card_drawn(self.name, Card(None, None))
 
-    def hint_consumed(self):
+    def track_hint(
+        self, destination: str, cards_idx: List[int], hint_type: str, hint_value: int
+    ) -> None:
         """
-        Increment (if possible) the count of used hint tokens
+        Update the agent's knowledge based on the hint that was just given
         """
-        self.hints = min(self.hints + 1, 8)
+        value = hint_value if hint_type == "value" else color_str2enum[hint_value]
+        self._game_state.hint_given(destination, cards_idx, hint_type, value)
 
-    def hint_gained(self):
-        """
-        Decrement (if possible) the count of used hint tokens
-        """
-        self.hints = max(0, self.hints - 1)
-
-    def mistake_made(self):
-        """
-        Increment (if possible) the count of used error tokens
-        """
-        self.errors += 1
-        assert self.errors < 3
-
-    def assert_aligned_with_server(self, hints_used: int, mistakes_made: int, board, trash: list, players: list):
+    def assert_aligned_with_server(
+        self,
+        hints_used: int,
+        mistakes_made: int,
+        board: Any,
+        trash: list,
+        players: list,
+    ) -> None:
         """
         FOR DEBUG ONLY: assert that every internal structure is consistent with the server knowledge
         Args:
@@ -1125,103 +121,45 @@ class Agent:
             trash: the list of actually discarded cards
             players: the list of objects of class Player - they also store their hands
         """
-        assert self.hints == hints_used, "wrong count of hints"
-        assert self.errors == mistakes_made, "wrong count of errors"
-        # b = [max(v) if len(v) > 0 else 0 for _, v in board.items()]
-        # assert self.board == b, f"wrong board: self.board: {self.board}, board: {board}"
-        assert self.trash == trash, " wrong trash"
+        assert self._game_state.hints == hints_used, "wrong count of hints"
+        assert self._game_state.errors == mistakes_made, "wrong count of errors"
+
+        # Board
+        b = np.array([len(cards) for cards in board.values()])
+        assert np.all(
+            self._game_state.board == b
+        ), f"wrong board: self.board: {self._game_state.board}, board: {b}"
+
+        # Trash
+        client_trash = self._game_state.trash.list
+        assert len(client_trash) == len(trash)
+        for idx in range(len(trash)):
+            assert client_trash[idx] == Card.from_server(
+                trash[idx]
+            ), f"Mismatch between cards in trash at idx {idx}"
+
+        # Hands
         for player in players:
-            assert player.hand == self.hands[player.name], f"player {player.name} wrong hand"
+            if player.name != self.name:
+                client_hand = self._game_state.hands[player.name]
+                assert len(player.hand) == len(client_hand)
+                for idx in range(len(player.hand)):
+                    assert client_hand[idx] == Card.from_server(
+                        player.hand[idx]
+                    ), f"player {player.name} wrong card in hand at idx {idx}"
 
-    def track_played_card(self, player_name: str, card_index: int):
-        """
-        Remove the played card from another player's hand
-        Args:
-            player_name: the player who played the card
-            card_index: the index of the played card in player_name's hand
-        """
-        del self.hands[player_name][card_index]
-        # TODO: update agent's hand (fully det)
-        self.knowledge.player_mental_state(player_name).reset_card_mental_state(card_index,
-                                                                                self.knowledge.player_template_ms(
-                                                                                    player_name))
-        if DEBUG:
-            print(f"Hands: {self.hands}")
-            print(f"Mental states: {self.knowledge.to_string(print_templates=True)}")
-
-    def track_drawn_card(self, players: list):
-        """
-        Only called if the player who played/discarded a card also drew a new one (i.e. if the has more than 0 cards)
-        Args:
-            players: the list of objects of class Player - they also store their hands
-        """
-        different_hands = 0
-        new_card = None
-        player = None
-        for p in players:
-            if len(p.hand) != len(self.hands[p.name]):
-                different_hands += 1
-                # NB: newly drawn cards are appended to the right
-                new_card = p.hand[-1]
-                player = p.name
-        assert new_card is not None, "new card not found"
-        assert different_hands == 1, "too many different cards"
-
-        self.hands[player].append(new_card)
-        for p in self.players:
-            if p != player:
-                self.knowledge.player_mental_state(p).update_whole_hand(new_card.value, colors.index(new_card.color))
-
-    def update_knowledge_on_hint(self, hint_type: str, value, positions: list, destination: str):
-        """
-        Update the knowledge of the hinted player. If it's the agent, also update the knowledge of other players
-        Args:
-            hint_type: 'value' or 'color'
-            value: the rank or the color, depending on hint_type
-            positions: the list of the positions of the cards which match the hint
-            destination: the name of the hinted player
-        """
-        if destination == self.name:
-            if hint_type == 'value':
-                for index in positions:
-                    self.knowledge.player_mental_state(destination).update_card(index, rank=value)
-                    fully_determined_now, fully_determined, rank, color = self.knowledge.player_mental_state(
-                        destination).get_card_from_index(
-                        index).is_fully_determined_now()
-                    if fully_determined_now:
-                        for player in self.players:
-                            if player != self.name:
-                                self.knowledge.player_mental_state(player).update_whole_hand(rank, color,
-                                                                                             fully_determined)
-                        self.knowledge.player_mental_state(destination).get_card_from_index(
-                            index).reset_fully_determined_now()
-
-            else:
-                for index in positions:
-                    self.knowledge.player_mental_state(destination).update_card(index, color=colors.index(value))
-                    fully_determined_now, fully_determined, rank, color = self.knowledge.player_mental_state(
-                        destination).get_card_from_index(
-                        index).is_fully_determined_now()
-                    if fully_determined_now:
-                        for player in self.players:
-                            if player != self.name:
-                                self.knowledge.player_mental_state(player).update_whole_hand(rank, color,
-                                                                                             fully_determined)
-                        self.knowledge.player_mental_state(destination).get_card_from_index(
-                            index).reset_fully_determined_now()
-        else:
-            if hint_type == 'value':
-                for index in positions:
-                    self.knowledge.player_mental_state(destination).update_card(index, rank=value)
-            else:
-                for index in positions:
-                    self.knowledge.player_mental_state(destination).update_card(index, color=colors.index(value))
-
-        if DEBUG:
-            print(f"Hands: {self.hands}")
-            print(f"Mental states: {self.knowledge.to_string()}")
-
-# TODO
-## when a card of the agent hand is fully determined add it to hands list
-## when a card is fully determined a update_template needs to be triggered
-## nella logica degli hint vengono dati punti anche alle carte che il giocatore sa già essere playable
+    def known_status(self) -> str:
+        s = f"At turn {self.turn} my knowledge is\n"
+        s += "Colors: "
+        for color in Color:
+            s += color_enum2str[color] + " "
+        s += "\n"
+        s += f"Board: {self._game_state.board}: score = {np.sum(self._game_state.board)}\n"
+        s += "Hands:"
+        for p, h in self._game_state.hands.items():
+            s += f"\tPlayer {p}: {h}\n"
+        s += f"\nTrash: {self._game_state.trash}\n"
+        s += f"Used hints: {self._game_state.hints}\n"
+        s += f"Errors made: {self._game_state.errors}\n"
+        s += f"Deck table: {str(self._game_state.deck)}\n"
+        return s

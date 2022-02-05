@@ -23,7 +23,7 @@ class MCTS:
         return best_move_node.data.move.position
     
     def run_search_iteration(self):
-        select_res = self.select(self.model.copy())
+        select_res = self.select(copy.copy(self.model))
         select_leaf = select_res[0]
         select_model = select_res[1]
 
