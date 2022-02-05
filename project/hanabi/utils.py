@@ -210,8 +210,6 @@ class Deck:
         max_iterations = 100
 
         while update_table:
-            update_table = False
-
             row_sums = np.sum(table, axis=1)
             r_idx = np.logical_and(row_sums <= self._reserved_ranks, row_sums != 0)
             if rank_known:
