@@ -25,6 +25,8 @@ HAND_SIZE = 5
 
 class GameState:
     """
+    Stores all the state of the game.
+
     Attributes:
         players:            list of player names in turn order
         root_player:   name of the root player (agent)
@@ -102,6 +104,12 @@ class GameState:
         return hand
 
     def get_prev_player_name(self, current_player: str) -> str:
+        """
+        Returns the name of the player whose turn was before current_player
+
+        Args:
+            current_player: the successor of the returned player
+        """
         current_player_idx = self.players.index(current_player)
         prev_player_idx = current_player_idx - 1
         if prev_player_idx < 0:
@@ -109,6 +117,12 @@ class GameState:
         return self.players[prev_player_idx]
 
     def get_next_player_name(self, current_player: str) -> str:
+        """
+        Returns the name of the player whose turn is after current_player
+
+        Args:
+            current_player: the predecessor of the returned player
+        """
         current_player_idx = self.players.index(current_player)
         next_player_idx = (current_player_idx + 1) % len(self.players)
         return self.players[next_player_idx]
@@ -166,7 +180,15 @@ class GameState:
     def hint_given(
         self, destination: str, cards_idx: List[int], hint_type: str, hint_value: int
     ) -> None:
-        """ """
+        """
+        Updates destination's knowledge based on the hint received
+
+        Args:
+            destination: the name of the destination of the hint
+            cards_idx: the list of the positions of destination's cards which match the hint
+            hint_type: whether the hint was a `value` or a `color` one
+            hint_value: the rank or the color of the hint
+        """
         assert self.hints < MAX_HINTS
         hand = self.hands[destination]
         for idx in cards_idx:
@@ -184,7 +206,10 @@ class GameState:
 
 
 class MCTSState(GameState):
-    """ """
+    """
+    Subclass of GameState, holds the state of the game during the MCTS. It has the same attributes of its superclass
+    but it has more methods.
+    """
 
     def __init__(self, initial_state: GameState) -> None:
         super().__init__(
@@ -270,13 +295,25 @@ class MCTSState(GameState):
 
     # MCTS
     def available_hints(self) -> int:
+        """
+        Returns the count of available hints.
+        """
         return MAX_HINTS - self.hints
 
     # MCTS
     def used_hints(self) -> int:
+        """
+        Returns the count of used hints
+        """
         return self.hints
 
     def redeterminize_hand(self, player_name: str) -> None:
+        """
+        Redeterminizes player_name's hand before exiting the node associated with their move.
+
+        Args:
+            player_name: the name of the player
+        """
         hand = self.hands[player_name]
         if player_name == self.root_player:
             raise RuntimeError("Cannot re-determinize root player's hand")
@@ -317,11 +354,8 @@ class MCTSState(GameState):
             player_name: the name of the player
             saved_hand: the hand to restore
         """
-        # hand_length = len(self.hands[player_name])
         self.deck.add_cards(self.hands[player_name])  # put cards back in deck
-        # self.hands[player_name] = []
         self._remove_illegal_cards(saved_hand)  # remove inconsistencies
-        # self.deck.remove_cards(saved_hand)  # pick cards from deck
         if len(self.hands[player_name]) > len(saved_hand):
             self.deck.assert_no_reserved_cards()
             saved_hand.append(self.deck.draw())
@@ -337,22 +371,6 @@ class MCTSState(GameState):
         Args:
             cards: the list of cards to modify
         """
-        # legal_cards = []
-
-        # locations = copy.copy(self.trash.list)
-        # for p in self.players:
-        #     locations += self.hands[p]
-
-        # for idx, card in enumerate(cards):
-        #     quantity = 1 + self.deck[card.rank, card.color]  # 1 is for "card" itself
-        #     for c in locations:
-        #         if c.rank == card.rank and c.color == card.color:
-        #             quantity += 1
-        #     if self.board[card.color] >= card.rank:
-        #         quantity += 1
-
-        #     if quantity == CARD_QUANTITIES[card.rank - 1]:
-        #         legal_cards.append(card)
 
         for idx in range(len(cards)):
             card = cards[idx]
@@ -362,6 +380,11 @@ class MCTSState(GameState):
                 cards[idx] = self.deck.draw()
 
     def assert_consistency(self) -> None:
+        """
+        Utility function, asserts that all its knowledge is consistent (i.e. the cards from the trash + the cards from
+        the board + the cards from the hands + the cards remaining in the deck should always be equal to the cards from
+        a full deck)s
+        """
         col = np.array(CARD_QUANTITIES)
         col = col.reshape(col.size, 1)
         full_table = np.tile(col, len(Color))
@@ -389,23 +412,10 @@ class MCTSState(GameState):
         If the game isn't ended, it returns False, None
         """
         if self.errors == MAX_ERRORS:
-            return True, self.eval_final_state() * SCORE_3_ERRORS
+            return True, sum(self.board) * SCORE_3_ERRORS
         # if self.board == self.trash.maxima:
         if np.all(self.board == 5):
-            return True, self.eval_final_state()
+            return True, sum(self.board)
         if all(self.last_turn_played.values()):
-            return True, self.eval_final_state()
+            return True, sum(self.board)
         return False, None
-
-    def eval_final_state(self, alpha: float = 0.1, beta: float = 1) -> float:
-        base_points = sum(self.board)
-        # ratios = [c.rank for c in self.trash.list]
-        # rank_ratios = {
-        #     r: ratios.count(r) / (CARD_QUANTITIES[r - 1] * len(Color))
-        #     for r in range(1, 1 + len(CARD_QUANTITIES))
-        # }
-        # five_count = rank_ratios[5]
-        # zero_count = np.count_nonzero(self.board == 0)  # actually counts zeros
-        # # return base_points - five_count * alpha - zero_count * beta
-        # coeff = base_points // 10 + 1
-        return base_points  # - (5 - min(self.board)) - np.sum(5-self.trash.maxima)
