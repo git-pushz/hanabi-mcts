@@ -26,11 +26,11 @@ class Agent:
             random.seed(SEED)
 
     def make_move(self) -> GameData.ClientToServerData:
-        """ """
+        """
+        Runs the MCTS and returns the GameData.ClientToServerData object corresponding to the action chosen.
+        """
         self.turn += 1
         mcts = MCTS(self._game_state, self.name)
-        # move = mcts.run_search(iterations=MCTS_ITERATIONS)
-        # move = mcts.run_search(time_budget=MOVE_TIME_BUDGET)
         move = mcts.run_search(time_budget=MCTS_TIME_BUDGET, iterations=MCTS_ITERATIONS)
         if move.action_type == "hint":
             hint_value = (
@@ -48,21 +48,22 @@ class Agent:
         else:
             raise RuntimeError(f"Unknown action type received: {move.action_type}")
 
-    def discover_own_card(self, card, card_idx: int, action_type: str = None) -> None:
+    def discover_own_card(self, card, card_idx: int) -> None:
         """
         Called whenever the agent plays or discards a card, this function update the deck knowledge if the discovered card is NOT fully determined.
 
         Args:
             card: the played/discarded card
             card_idx: the index of card in agent's hand
-            action_type: it's one of ['play', 'mistake', 'discard'] FOR DEBUG ONLY
         """
         self._game_state.root_card_discovered(
             card_idx, card.value, color_str2enum[card.color]
         )
 
-
     def track_discarded_card(self, player: str, card_idx: int) -> None:
+        """
+        Calls the GameState function to keep track of a discarded card
+        """
         self._game_state.card_discarded(player, card_idx)
 
     def track_played_card(self, player: str, card_idx: int, correctly: bool) -> None:
@@ -70,7 +71,6 @@ class Agent:
 
     def track_drawn_card(self, players: list) -> None:
         """
-
         Track a card drawn by another player form the deck
         """
         different_hands = 0
@@ -149,6 +149,9 @@ class Agent:
                     ), f"player {player.name} wrong card in hand at idx {idx}"
 
     def known_status(self) -> str:
+        """
+        Utility function, returns a formatted string with all the knowledge up to this point.
+        """
         s = f"At turn {self.turn} my knowledge is\n"
         s += "Colors: "
         for color in Color:

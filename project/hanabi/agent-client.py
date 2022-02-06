@@ -1,14 +1,10 @@
 #!/usr/bin/env python3
-import signal
 from sys import argv, stdout
 from threading import Thread, Condition
 import GameData
 import socket
-
-import agent
 from constants import *
-from agent import Agent, DEBUG, VERBOSE, LOG
-import os
+from agent import Agent, DEBUG, VERBOSE
 import traceback
 
 
@@ -30,16 +26,18 @@ def main():
     statuses = ["Lobby", "Game", "GameHint"]
     status = statuses[0]
 
-    def exit_action():
-        nonlocal run
-        run = False
-        os._exit(0)
-
     def show_action():
+        """
+        Called to send a `show` request to the server
+        """
         if status == statuses[1]:
             s.send(GameData.ClientGetGameStateRequest(agent_name).serialize())
 
     def agent_move_thread():
+        """
+        This is the code of the thread that manages the agent. It waits on a condition variable for its turn, calls the
+        Agent.make_move method and sends its result to the server.
+        """
         with cv:
             while run:
                 if DEBUG or VERBOSE:
@@ -63,17 +61,6 @@ def main():
                                 print(
                                     f"\tHint: {move.type} {move.value} to {move.destination}"
                                 )
-                        if LOG:
-                            with open(agent.FILE, "a") as f:
-                                f.write(
-                                    f"At turn {agent.turn} I chose the move {move.action}:\n"
-                                )
-                                if hasattr(move, "handCardOrdered"):
-                                    f.write(f"\tCard: {move.handCardOrdered}\n")
-                                if hasattr(move, "type") and hasattr(move, "value"):
-                                    f.write(
-                                        f"\tHint: {move.type} {move.value} to {move.destination}\n"
-                                    )
                     elif move is None:
                         print("MOVE IS NONE")
                     s.send(move.serialize())
@@ -82,16 +69,29 @@ def main():
                 stdout.flush()
 
     def check_agent_turn(current_player: str):
+        """
+        Utility function: checks if current_player is the agent and possibly perform a notify on the condition variable.
+
+        Args:
+            current_player: the player of this turn, according to the GameData.ServerToClientData object received.
+        """
         if current_player == agent_name:
             with cv:
                 cv.notify()
 
-    def check_turn_and_new_cards(
-        agent: Agent, new_card_drawn: bool, last_player: str, current_player: str
-    ) -> None:
-        if last_player == agent.name:
+    def check_turn_and_new_cards(agent_obj: Agent, new_card_drawn: bool, last_player: str, current_player: str) -> None:
+        """
+        Performs the right action based on the last action performed by some player.
+
+        Args:
+            agent_obj: the object of class Agent
+            new_card_drawn: it's False if the deck was empty and who played couldn't draw a new card
+            last_player: the name of the last player
+            current_player: the name of the player whose turn is
+        """
+        if last_player == agent_obj.name:
             if new_card_drawn:
-                agent.draw_card()
+                agent_obj.draw_card()
             print("Current player: " + current_player)
         else:
             if new_card_drawn:
@@ -131,8 +131,6 @@ def main():
                         + str(data.connectedPlayers)
                         + " players"
                     )
-                # data = s.recv(DATASIZE)
-                # data = GameData.GameData.deserialize(data)
 
             # 2 received when all players are ready
             if type(data) is GameData.ServerStartGameData:
@@ -182,7 +180,7 @@ def main():
                 print("Action valid!")
 
                 if data.lastPlayer == agent_name:
-                    agent.discover_own_card(data.card, data.cardHandIndex, "discard")
+                    agent.discover_own_card(data.card, data.cardHandIndex)
 
                 agent.track_discarded_card(data.lastPlayer, data.cardHandIndex)
 
@@ -199,7 +197,7 @@ def main():
                 print("Nice move!")
 
                 if data.lastPlayer == agent_name:
-                    agent.discover_own_card(data.card, data.cardHandIndex, "play")
+                    agent.discover_own_card(data.card, data.cardHandIndex)
 
                 agent.track_played_card(
                     data.lastPlayer, data.cardHandIndex, correctly=True
@@ -218,7 +216,7 @@ def main():
                 print("OH NO! The Gods are unhappy with you!")
 
                 if data.lastPlayer == agent_name:
-                    agent.discover_own_card(data.card, data.cardHandIndex, "mistake")
+                    agent.discover_own_card(data.card, data.cardHandIndex)
 
                 agent.track_played_card(
                     data.lastPlayer, data.cardHandIndex, correctly=False
@@ -259,7 +257,7 @@ def main():
                     print(data.data)
                 # decrement turn because this notify will make the agent take another decision (in the current turn)
                 # in the make_move, which by default increments the turns count
-                # agent.turn -= len(agent.players)
+                agent.turn -= 1
                 with cv:
                     cv.notify()
                 # something went wrong, it shouldn't happen
@@ -274,7 +272,6 @@ def main():
                 run = False
                 with cv:
                     cv.notify()
-                # TODO: stop client thread (destroy CV ??)
 
             if not dataOk:
                 print("Unknown or unimplemented data type: " + str(type(data)))
@@ -284,4 +281,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    # os.kill(os.getppid(), signal.SIGHUP)
