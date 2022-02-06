@@ -13,6 +13,9 @@ DEBUG = False
 
 
 def find(pred, iterable):
+    """
+    Utility function.
+    """
     for element in iterable:
         if pred(element):
             return element
@@ -20,6 +23,13 @@ def find(pred, iterable):
 
 
 class MCTS:
+    """
+    Wrapper class for the Monte Carlo Tree Search.
+
+    Attributes:
+        game_state: the GameState object corresponding to the current state of the "actual" game
+        tree: the tree structure used for the search
+    """
     def __init__(self, game_state: GameState, current_player: str) -> None:
         self.game_state = game_state
         prev_player = game_state.get_prev_player_name(current_player)
@@ -29,6 +39,13 @@ class MCTS:
         self.tree = Tree(root)
 
     def run_search(self, time_budget: int = None, iterations: int = None) -> GameMove:
+        """
+        Wrapper to the call of each iteration of the MCTS.
+
+        Args:
+            time_budget: the maximum amount of time for a set of iterations
+            iterations: the maximum number of iterations
+        """
         if (iterations is None) and (time_budget is None):
             raise RuntimeError(
                 "At least one between iterations and time_budget must be specified"
@@ -63,6 +80,9 @@ class MCTS:
         return best_move_node.data.move
 
     def _run_search_iteration(self) -> None:
+        """
+        Performs a single iteration of the run_search.
+        """
         select_leaf, select_model = self._select(Model(MCTSState(self.game_state)))
 
         # print('selected node ', select_leaf)
@@ -94,6 +114,12 @@ class MCTS:
             input("Enter...")
 
     def _select(self, model: Model) -> Tuple[Node, Model]:
+        """
+        Performs the select phase of the MCTS.
+
+        Args:
+            model: the class Model object
+        """
         node = self.tree.get_root()
         # model.state.redeterminize_hand(model.state.root_player)
         next_player = model.state.get_next_player_name(node.data.move.player)
@@ -114,6 +140,13 @@ class MCTS:
         return len(self._get_available_plays(node, model)) == 0
 
     def _get_available_plays(self, node: Node, model: Model) -> List[GameMove]:
+        """
+        Returns the list of feasible moves from a certain node
+
+        Args:
+            node: the current node
+            model: the object of class model
+        """
         children = self.tree.get_children(node)
         player = model.state.get_next_player_name(node.data.move.player)
         # return only valid moves which haven't been already tried in children
@@ -125,6 +158,13 @@ class MCTS:
         )
 
     def _expand(self, node: Node, model: Model) -> Tuple[Node, Model]:
+        """
+        Performs the expand phase of the MCTS.
+
+        Args:
+            node: the frontier node returned bu the _select
+            model: the object of class model
+        """
         expanded_node = None
 
         # model.check_win should check if the match is over, not if it is won (see simulation and backpropagation function)
@@ -143,6 +183,13 @@ class MCTS:
         return expanded_node, model
 
     def _simulate(self, node: Node, model: Model) -> int:
+        """
+        Performs the simulate phase of the MCTS.
+
+        Args:
+            node: the node returned from the expand phase
+            model: the object of class model
+        """
         current_player = node.data.move.player
 
         # here random moves are made until someone wins, then the winning player is passed to backpropagation function
@@ -162,6 +209,13 @@ class MCTS:
 
     # def backpropagate(self, node, winner: int):
     def _backpropagate(self, node: Node, score: int) -> None:
+        """
+        Performs the backpropagate phase of the MCTS.
+
+        Args:
+            node: the 'youngest' node of the explored tree (the one returned from the expand phase)
+            score: the score of the simulated game
+        """
         # as the simulation function, this one needs to be changed
         # here nodes value is incremented if it leads to a winning game for the agent
         # but in our case need to be evaluated in proportion to the score
@@ -171,11 +225,17 @@ class MCTS:
             # it maps the score to [0, 1]
             node.data.value += score / 25
             node = self.tree.get_parent(node)
-            # print('parent node ', node)
-            # print('is ', node.data.move.position, ' root? ', node.is_root())
         node.data.simulations += 1
 
     def _UCB1(self, node: Node, parent: Node, c: float = 0.1) -> float:
+        """
+        Calculates the Upper Confidence Bound for the MCTS.
+
+        Args:
+            node: the node for which it calculates the UCB
+            parent: the parent node of `node`
+            c: the coefficient of the formula
+        """
         exploitation = node.data.value / node.data.simulations
         if parent.data.simulations == 0:
             exploration = 0
@@ -186,6 +246,12 @@ class MCTS:
         return exploitation + c * exploration
 
     def _get_best_child_UCB1(self, node: Node) -> Node:
+        """
+        Returns the best child of node, based on the UCB calculations.
+
+        Args:
+             node: the node whose children are being evaluated
+        """
         node_scores = map(
             lambda f: [f, self._UCB1(f, node)], self.tree.get_children(node)
         )
