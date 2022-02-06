@@ -80,14 +80,38 @@ class Rules:
 
     @staticmethod
     def _is_playable(card: Card, board: np.ndarray, trash: Trash) -> bool:
+        """
+        Determines whether the card is currently playable or not.
+
+        Args:
+            card: the card being evaluated
+            board: the game board of played cards
+            trash: unused argument, needed for the signature of the method
+        """
         return board[card.color] == card.rank - 1
 
     @staticmethod
     def _is_discardable(card: Card, board: np.ndarray, trash: Trash) -> bool:
+        """
+        Determines whether the card is currently discardable or not.
+
+        Args:
+            card: the card being evaluated
+            board: the game board of played cards
+            trash: the trash of the game
+        """
         return board[card.color] >= card.rank or trash.maxima[card.color] < card.rank
 
     @staticmethod
     def _is_unplayable(card: Card, board: np.ndarray, trash: Trash) -> bool:
+        """
+        Determines whether the card is currently unplayable or not.
+
+        Args:
+            card: the card being evaluated
+            board: the game board of played cards
+            trash: the trash of the game
+        """
         return not (
             Rules._is_playable(card, board, trash)
             or Rules._is_discardable(card, board, trash)
@@ -95,10 +119,26 @@ class Rules:
 
     @staticmethod
     def _is_expendable(card: Card, board: np.ndarray, trash: Trash) -> bool:
+        """
+        Determines whether the card is currently expendable (it isn't the last of its kind) or not.
+
+        Args:
+            card: the card being evaluated
+            board: unused argument, needed for the signature of the method
+            trash: the trash of the game
+        """
         return trash[int(card.rank), card.color] > 1
 
     @staticmethod
     def _is_risky(card: Card, board: np.ndarray, trash: Trash) -> bool:
+        """
+        Determines whether the card is currently risky (it is the last of its kind) or not.
+
+        Args:
+            card: the card being evaluated
+            board: unused argument, needed for the signature of the method
+            trash: the trash of the game
+        """
         return trash[int(card.rank), card.color] == 1
 
     @staticmethod
@@ -108,6 +148,15 @@ class Rules:
         board: np.ndarray,
         trash: Trash,
     ) -> np.ndarray:
+        """
+        Returns the probability for each card of hand of matching the fn_condition
+
+        Args:
+            hand: the hand being currently evaluated
+            fn_condition: the condition being tested
+            board: the board of the game
+            trash: the trash of the game
+        """
         probabilities = np.empty(len(hand), dtype=np.float)
 
         for idx, card in enumerate(hand):
@@ -134,6 +183,9 @@ class Rules:
     # RULE 1
     @staticmethod
     def _tell_most_information() -> Optional[GameMove]:
+        """
+        Rule 1. It tries to give the hint that tells the most information.
+        """
         if Rules._state.available_hints() == 0:
             return None
 
@@ -197,6 +249,12 @@ class Rules:
     def _tell_anyone(
         fn_condition: Callable[[Card, np.ndarray, Trash], bool],
     ) -> Optional[GameMove]:
+        """
+        Rules 2 and 3. Tries to hint about a playable or discardable card.
+
+        Args:
+            fn_condition: the condition being tested
+        """
         if Rules._state.available_hints() == 0:
             return None
 
@@ -231,6 +289,12 @@ class Rules:
     def _complete_tell_anyone(
         fn_condition: Callable[[Card, np.ndarray, Trash], bool],
     ) -> Optional[GameMove]:
+        """
+        Rules 4, 5 and 6. Tries to hint another player about an information that completes their knowledge on some card
+
+        Args:
+            fn_condition: the condition being tested
+        """
         if Rules._state.available_hints() == 0:
             return None
 
@@ -266,6 +330,12 @@ class Rules:
     # RULE 7
     @staticmethod
     def _play_probably_safe(threshold: float = 0.7) -> Optional[GameMove]:
+        """
+        Rule 7. Tries to play the most probably safe card.
+
+        Args:
+            threshold: the threshold of probability above which a card is considered safe to play.
+        """
         action_type = "play"
 
         probabilities = Rules._get_probabilities(
@@ -285,6 +355,14 @@ class Rules:
     # RULE 8
     @staticmethod
     def _play_probably_safe_late(threshold: float = 0.4) -> Optional[GameMove]:
+        """
+        Rule 8. Tries to play the most probably safe card in the last rounds of the game. It's the same as rule 7,
+        but its threshold is way lower.
+
+        Args:
+            threshold: the threshold of probability above which a card is considered safe to play.
+        """
+
         move = None
         if len(Rules._state.deck) <= RULE_8_DECK_LENGTH:
             move = Rules._play_probably_safe(threshold)
@@ -293,6 +371,12 @@ class Rules:
     # RULE 9
     @staticmethod
     def _discard_probably_useless(threshold: float) -> Optional[GameMove]:
+        """
+        Rule 9. Tries to discard the most probably useless card.
+
+        Args:
+            threshold: the threshold of probability above which a card is considered safe to discard.
+        """
         if Rules._state.used_hints() == 0:
             return None
 
@@ -334,6 +418,12 @@ class Rules:
     # RULE 10
     @staticmethod
     def _discard_least_likely_to_be_necessary(threshold: int) -> Optional[GameMove]:
+        """
+        Rule 10. Tries to discard the most probably expendable card.
+
+        Args:
+            threshold: the threshold of probability above which a card is considered safe to expend.
+        """
         if Rules._state.used_hints() == 0:
             return None
         action_type = "discard"
