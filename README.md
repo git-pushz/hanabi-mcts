@@ -3,11 +3,12 @@
 ## Hanabi game
 
 Rules for the game of hanabi can be found [here](https://www.spillehulen.dk/media/102616/hanabi-card-game-rules.pdf).
+
 Develop an AI capable of playing Hanabi is not trivial: the game is cooperative, not zero-sum and with imperfect information.
 
 ## Referenced paper
 
-We did lots of research in order to implement the AI, but most of the algorithm is an implementation of the paper [Re-determinizing Information Set Monte Carlo Tree Search in Hanabi] (https://arxiv.org/pdf/1902.06075.pdf)
+We did lots of research in order to implement the AI, but most of the algorithm is an implementation of the paper [Re-determinizing Information Set Monte Carlo Tree Search in Hanabi](https://arxiv.org/pdf/1902.06075.pdf)
 
 ## Results
 
